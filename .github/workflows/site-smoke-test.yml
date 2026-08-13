@@ -5,6 +5,10 @@ on:
   push:
     paths:
       - '.github/workflows/site-smoke-test.yml'
+      - 'functions/api/radar-berlin.js'
+      - 'functions/api/route.js'
+      - 'public/index.html'
+      - 'public/enhancements.js'
 
 permissions:
   contents: read
@@ -13,13 +17,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check public app
+      - name: Wait for public app
         shell: bash
         run: |
-          set -euo pipefail
-          curl -fLsS --max-time 30 https://berlin-live-transit.pages.dev/ -o /tmp/index.html
-          grep -q 'Berlin Live Transit' /tmp/index.html
-          status=$(curl -LsS --max-time 40 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin')
-          echo "radar_http=$status"
+          set -e
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            home=$(curl -LsS --max-time 25 -o /tmp/index.html -w '%{http_code}' 'https://berlin-live-transit.pages.dev/' || true)
+            radar=$(curl -LsS --max-time 35 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin' || true)
+            route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
+            echo "attempt=$i home=$home radar=$radar route=$route"
+            if [ "$home" = "200" ] && [ "$radar" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
+            sleep 10
+          done
           cat /tmp/radar.json
-          test "$status" = "200"
+          echo
+          test "$ok" = "1"
