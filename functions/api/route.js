@@ -5,6 +5,7 @@ const UPSTREAMS = [
 
 const ROUTE_WINDOW_MINUTES = 60;
 const ROUTE_RESULTS = 16;
+const MAX_LATER_PAGES = 2;
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -121,6 +122,15 @@ function journeyDepartureMs(journey) {
   return new Date(legs[0]?.departure || legs[0]?.plannedDeparture || 0).getTime();
 }
 
+function latestDepartureMs(journeys) {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const journey of journeys) {
+    const departure = journeyDepartureMs(journey);
+    if (Number.isFinite(departure) && departure > latest) latest = departure;
+  }
+  return latest;
+}
+
 function journeyScore(journey) {
   const legs = Array.isArray(journey?.legs) ? journey.legs : [];
   if (!legs.length) return Number.POSITIVE_INFINITY;
@@ -139,6 +149,20 @@ function journeyIdentity(journey) {
     if (leg?.walking) return `walk:${leg?.origin?.name || ""}>${leg?.destination?.name || ""}`;
     return `${leg?.tripId || ""}:${leg?.line?.id || leg?.line?.name || ""}:${leg?.departure || leg?.plannedDeparture || ""}`;
   }).join("|");
+}
+
+function continuationParams(laterRef) {
+  return new URLSearchParams({
+    laterThan: String(laterRef),
+    results: String(ROUTE_RESULTS),
+    stopovers: "true",
+    polylines: "true",
+    remarks: "true",
+    language: "de",
+    pretty: "false",
+    startWithWalking: "true",
+    walkingSpeed: "normal"
+  });
 }
 
 async function routeVia(base, fromText, toText) {
@@ -165,10 +189,23 @@ async function routeVia(base, fromText, toText) {
   addLocation(params, "from", from);
   addLocation(params, "to", to);
 
-  const data = await fetchJson(`${base}/journeys?${params}`);
-  const journeys = Array.isArray(data?.journeys) ? data.journeys : [];
-  const usableRaw = journeys.filter(j => Array.isArray(j?.legs) && j.legs.length);
+  const firstPage = await fetchJson(`${base}/journeys?${params}`);
+  const allJourneys = Array.isArray(firstPage?.journeys) ? [...firstPage.journeys] : [];
+  let laterRef = firstPage?.laterRef || null;
+  let laterPages = 0;
+  let realtimeDataUpdatedAt = firstPage?.realtimeDataUpdatedAt || null;
 
+  while (laterRef && laterPages < MAX_LATER_PAGES && latestDepartureMs(allJourneys) < windowUntil) {
+    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef)}`);
+    const more = Array.isArray(page?.journeys) ? page.journeys : [];
+    if (!more.length) break;
+    allJourneys.push(...more);
+    laterRef = page?.laterRef || null;
+    realtimeDataUpdatedAt = page?.realtimeDataUpdatedAt || realtimeDataUpdatedAt;
+    laterPages++;
+  }
+
+  const usableRaw = allJourneys.filter(j => Array.isArray(j?.legs) && j.legs.length);
   const unique = new Map();
   for (const journey of usableRaw) {
     const key = journeyIdentity(journey);
@@ -197,7 +234,8 @@ async function routeVia(base, fromText, toText) {
     routeWindowMinutes: ROUTE_WINDOW_MINUTES,
     routeWindowStart: new Date(requestedAt).toISOString(),
     routeWindowEnd: new Date(windowUntil).toISOString(),
-    realtimeDataUpdatedAt: data?.realtimeDataUpdatedAt || null
+    laterPagesFetched: laterPages,
+    realtimeDataUpdatedAt
   };
 }
 
