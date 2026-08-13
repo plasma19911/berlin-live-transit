@@ -1,0 +1,40 @@
+name: Fix route sync cleanup
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/fix-route-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove obsolete planned marker call
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/enhancements.js')
+          s=p.read_text(encoding='utf-8')
+          needle='      syncPlannedVehicleMarkers();\n'
+          count=s.count(needle)
+          assert count == 1, f'expected exactly one obsolete call, found {count}'
+          s=s.replace(needle,'',1)
+          assert 'syncPlannedVehicleMarkers(' not in s, 'obsolete planned marker call still present'
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate JavaScript
+        run: |
+          node --check public/enhancements.js
+          git diff --check
+      - name: Commit fix
+        run: |
+          git config user.name "ChatGPT Route Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/fix-route-sync.yml
+          git add public/enhancements.js
+          git commit -m "Fix route planner after planned marker removal"
+          git push
