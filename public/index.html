@@ -1005,9 +1005,19 @@ function renderVehicles(){
   let plannedIds=null;
   if(plannedFilterActive){
     const base=[...state.vehicles.entries()].filter(([,d])=>state.enabled.has(d.mode));
-    let matches=base.filter(([,d])=>plannedRouteVehicleMatch(d));
-    if(!matches.length){
-      matches=base.filter(([,d])=>plannedRouteVehicleMatch(d,{relaxed:true}));
+    const eligibility=window.__berlinRouteEligibility;
+    let matches;
+    if(eligibility?.active && eligibility.ready && eligibility.ids instanceof Set){
+      matches=base.filter(([id])=>eligibility.ids.has(id));
+    }else if(eligibility?.active){
+      // While full stop-sequence validation is running, only show exact planned trips.
+      matches=base.filter(([,d])=>{
+        const trip=String(d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id||"");
+        return trip && routeFilter.legs.some(leg=>leg.tripId&&String(leg.tripId)===trip);
+      });
+    }else{
+      matches=base.filter(([,d])=>plannedRouteVehicleMatch(d));
+      if(!matches.length)matches=base.filter(([,d])=>plannedRouteVehicleMatch(d,{relaxed:true}));
     }
     plannedIds=new Set(matches.map(([id])=>id));
 

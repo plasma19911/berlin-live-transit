@@ -60,12 +60,6 @@
     .route-leg:first-child{border-top:0}
     .route-leg-badge{min-width:44px;padding:3px 5px;border-radius:7px;text-align:center;font-size:9px;font-weight:1000;background:var(--leg-color,#65758a);color:var(--leg-fg,#fff);border:1px solid rgba(255,255,255,.75)}
     body.planned-route-focus .veh{box-shadow:0 0 0 2px rgba(255,255,255,.98),0 0 0 5px rgba(5,10,16,.88),0 0 18px rgba(77,168,255,.75)!important}
-    .planned-vehicle-icon{background:transparent!important;border:0!important;overflow:visible!important}
-    .planned-vehicle-card{min-width:72px;padding:5px 7px;border-radius:10px;background:rgba(11,18,27,.94);border:2px dashed rgba(255,255,255,.9);box-shadow:0 3px 12px rgba(0,0,0,.55);color:#fff;text-align:center;font-family:Inter,system-ui,sans-serif;line-height:1.05}
-    .planned-vehicle-card .pv-mode{display:block;font-size:7px;font-weight:1000;letter-spacing:.08em;color:var(--pv-color,#4da8ff)}
-    .planned-vehicle-card .pv-line{display:block;font-size:12px;font-weight:1000;margin-top:2px}
-    .planned-vehicle-card .pv-time{display:block;font-size:8px;font-weight:800;color:#d9e5f2;margin-top:3px}
-    .planned-vehicle-card .pv-count{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:8px;background:rgba(77,168,255,.22);font-size:8px}
     @media(max-width:700px){
       .transport-toggle{display:block}
       .side{gap:6px!important}
@@ -87,7 +81,7 @@
   style.textContent = css;
   document.head.appendChild(style);
 
-  const routeState = { layers: [], controller: null, plannedVehicleLayer: null };
+  const routeState = { layers: [], controller: null, eligibilitySeq: 0 };
   const routeFocusState = { active: false, paneDisplays: new Map() };
 
   function ensurePlannerPanes(map) {
@@ -200,73 +194,189 @@
     return normRouteValue(value).replace(/^(bus|tram|strassenbahn|sbahn|ubahn|regionalbahn|regionalexpress|express)+/, "");
   }
 
-  function liveVehicleMatchesLeg(vehicle, leg) {
-    if (!vehicle || !leg) return false;
+  function modeCompatible(a, b) {
+    if (!a || !b || a === b) return true;
+    const railA = a === "regional" || a === "express";
+    const railB = b === "regional" || b === "express";
+    return railA && railB;
+  }
+
+  function sameRouteLine(vehicle, leg) {
+    if (!vehicle || !leg || !modeCompatible(vehicle.mode, leg.mode)) return false;
     const raw = vehicle.raw || {};
-    const liveTrip = String(raw.tripId || raw.journeyId || raw.trip?.id || "");
-    const plannedTrip = String(leg.tripId || "");
-    if (liveTrip && plannedTrip) return liveTrip === plannedTrip;
-
-    const liveLine = normRouteLine(vehicle.line || raw.line?.name || raw.line?.id);
-    const plannedLine = normRouteLine(leg.line || leg.lineId);
-    if (!liveLine || !plannedLine || liveLine !== plannedLine) return false;
-    if (leg.mode && vehicle.mode && leg.mode !== vehicle.mode) return false;
-
-    const liveDirection = normRouteValue(raw.direction || raw.destination?.name || raw.destination || "");
-    const plannedDirection = normRouteValue(leg.direction || "");
-    return !liveDirection || !plannedDirection || liveDirection.includes(plannedDirection) || plannedDirection.includes(liveDirection);
+    const live = [vehicle.line, raw.line?.name, raw.line?.id].map(normRouteLine).filter(Boolean);
+    const planned = [leg.line, leg.lineId].map(normRouteLine).filter(Boolean);
+    return live.some(v => planned.some(p => v === p || (v.length > 1 && p.length > 1 && (v.endsWith(p) || p.endsWith(v)))));
   }
 
-  function syncPlannedVehicleMarkers() {
-    const map = window.__berlinLiveMap;
-    if (!map) return;
-    ensurePlannerPanes(map);
-    if (routeState.plannedVehicleLayer && map.hasLayer(routeState.plannedVehicleLayer)) {
-      map.removeLayer(routeState.plannedVehicleLayer);
-    }
-    routeState.plannedVehicleLayer = null;
+  function placeId(place) {
+    return String(place?.id || place?.stop?.id || place?.station?.id || "");
+  }
 
+  function placeName(place) {
+    return String(place?.name || place?.stop?.name || place?.station?.name || place?.address || "");
+  }
+
+  function placePoint(place) {
+    const p = place?.location || place?.stop?.location || place?.station?.location || place;
+    const lat = Number(p?.latitude ?? p?.lat), lon = Number(p?.longitude ?? p?.lon);
+    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null;
+  }
+
+  function distanceMeters(a, b) {
+    if (!a || !b) return Infinity;
+    const [lat1, lon1] = a.map(Number), [lat2, lon2] = b.map(Number);
+    if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Infinity;
+    const R = 6371000;
+    const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  function stopMatches(stopover, id, name, lat, lon) {
+    const stop = stopover?.stop || stopover;
+    const sid = placeId(stop);
+    if (id && sid && String(id) === sid) return true;
+    const a = normRouteValue(placeName(stop));
+    const b = normRouteValue(name);
+    if (a && b && (a === b || (a.length > 5 && b.length > 5 && (a.includes(b) || b.includes(a))))) return true;
+    const p = placePoint(stop);
+    return p && Number.isFinite(Number(lat)) && Number.isFinite(Number(lon)) && distanceMeters(p, [Number(lat), Number(lon)]) <= 280;
+  }
+
+  function stopTimeMs(stopover) {
+    for (const value of [stopover?.departure, stopover?.arrival, stopover?.plannedDeparture, stopover?.plannedArrival]) {
+      const ms = new Date(value || 0).getTime();
+      if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    return NaN;
+  }
+
+  const liveTripCache = new Map();
+  async function fetchLiveTrip(tripId) {
+    const id = String(tripId || "");
+    if (!id) return null;
+    const cached = liveTripCache.get(id);
+    if (cached && Date.now() - cached.at < 20000) return cached.trip;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6500);
+    try {
+      const r = await fetch(`/api/trip?id=${encodeURIComponent(id)}`, {
+        cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" }, signal: controller.signal
+      });
+      if (!r.ok) return null;
+      const json = await r.json();
+      const trip = json?.trip || json;
+      liveTripCache.set(id, { at: Date.now(), trip });
+      return trip;
+    } catch (_) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function tripStillReachesLeg(trip, leg) {
+    const stops = Array.isArray(trip?.stopovers) ? trip.stopovers : [];
+    if (!stops.length) return false;
+
+    const boardIndexes = [];
+    const alightIndexes = [];
+    for (let i = 0; i < stops.length; i++) {
+      if (stopMatches(stops[i], leg.boardId, leg.boardName, leg.boardLat, leg.boardLon)) boardIndexes.push(i);
+      if (stopMatches(stops[i], leg.alightId, leg.alightName, leg.alightLat, leg.alightLon)) alightIndexes.push(i);
+    }
+    if (!boardIndexes.length || !alightIndexes.length) return false;
+
+    const now = Date.now();
+    for (const bi of boardIndexes) {
+      const ai = alightIndexes.find(x => x > bi);
+      if (ai == null) continue; // wrong direction: destination occurs before boarding stop
+      const boardTime = stopTimeMs(stops[bi]);
+      // A short grace period keeps a delayed vehicle visible around the boarding stop.
+      if (!Number.isFinite(boardTime) || boardTime >= now - 2 * 60 * 1000) return true;
+    }
+    return false;
+  }
+
+  function directionLooksCompatible(vehicle, leg) {
+    const raw = vehicle?.raw || {};
+    const liveDir = normRouteValue(raw.direction || raw.destination?.name || raw.destination || "");
+    const plannedDir = normRouteValue(leg?.direction || "");
+    return !liveDir || !plannedDir || liveDir.includes(plannedDir) || plannedDir.includes(liveDir);
+  }
+
+  async function refreshRouteLiveEligibility() {
     const filter = window.__berlinPlannedVehicleFilter;
-    if (!filter?.active || !Array.isArray(filter.legs) || !filter.legs.length) return;
-    const live = [...(window.__berlinLiveState?.vehicles?.values?.() || [])];
-    const groups = new Map();
+    const liveState = window.__berlinLiveState;
+    const map = window.__berlinLiveMap;
+    const seq = ++routeState.eligibilitySeq;
 
-    for (const leg of filter.legs) {
-      const lat = Number(leg.boardLat), lon = Number(leg.boardLon);
-      if (![lat, lon].every(Number.isFinite)) continue;
-      if (live.some(v => liveVehicleMatchesLeg(v, leg))) continue;
-
-      const dep = new Date(leg.departure || 0);
-      const depMs = dep.getTime();
-      // Old scheduled trips are not useful; keep a short grace period for late realtime updates.
-      if (Number.isFinite(depMs) && depMs < Date.now() - 5 * 60 * 1000) continue;
-
-      const key = [leg.mode || "regional", normRouteLine(leg.line || leg.lineId), lat.toFixed(5), lon.toFixed(5)].join("|");
-      if (!groups.has(key)) groups.set(key, { leg, lat, lon, times: [], trips: [] });
-      const g = groups.get(key);
-      g.times.push(Number.isFinite(depMs) ? fmtTime(dep) : "—");
-      if (leg.tripId) g.trips.push(String(leg.tripId));
+    if (!filter?.active || !Array.isArray(filter.legs) || !filter.legs.length || !liveState?.vehicles) {
+      window.__berlinRouteEligibility = { active: false, ready: true, ids: new Set() };
+      return;
     }
 
-    const markers = [];
-    for (const g of groups.values()) {
-      g.times = [...new Set(g.times)].sort();
-      const leg = g.leg;
-      const info = modeInfo[leg.mode] || modeInfo.regional;
-      const line = String(leg.line || leg.lineId || info.label || "?");
-      const count = g.times.length;
-      const firstTime = g.times[0] || "—";
-      const countHtml = count > 1 ? `<span class="pv-count">×${count}</span>` : "";
-      const html = `<div class="planned-vehicle-card" style="--pv-color:${info.c}"><span class="pv-mode">⏱ GEPLANT · ${esc(info.label)}</span><span class="pv-line">${esc(line)}${countHtml}</span><span class="pv-time">ab ${esc(firstTime)}</span></div>`;
-      const icon = L.divIcon({ className: "planned-vehicle-icon", html, iconSize: [82, 48], iconAnchor: [41, 24] });
-      const marker = L.marker([g.lat, g.lon], { pane: "plannerVehiclePane", icon, keyboard: false, interactive: true });
-      marker.bindTooltip(`<b>GEPLANT · ${esc(info.label)} ${esc(line)}</b><br>Ab Einstieg: ${g.times.map(esc).join(", ")}<br><span style="opacity:.75">Noch keine echte Live-Position im Radar.</span>`, { direction: "top", offset: [0, -20] });
-      markers.push(marker);
+    window.__berlinRouteEligibility = { active: true, ready: false, ids: new Set() };
+    if (map) map.fire("moveend");
+
+    const eligible = new Set();
+    const jobs = [];
+    const now = Date.now();
+
+    for (const [vehicleId, vehicle] of liveState.vehicles.entries()) {
+      const matchingLegs = filter.legs.filter(leg => sameRouteLine(vehicle, leg));
+      if (!matchingLegs.length) continue;
+
+      const raw = vehicle.raw || {};
+      const liveTripId = String(raw.tripId || raw.journeyId || raw.trip?.id || "");
+
+      // Exact planned trip: show immediately if its boarding time has not passed.
+      const exact = matchingLegs.some(leg => {
+        if (!liveTripId || !leg.tripId || liveTripId !== String(leg.tripId)) return false;
+        const dep = new Date(leg.departure || 0).getTime();
+        return !Number.isFinite(dep) || dep >= now - 2 * 60 * 1000;
+      });
+      if (exact) {
+        eligible.add(vehicleId);
+        continue;
+      }
+
+      // Without a trip id we cannot inspect the future stop sequence. Use a conservative
+      // same-line + same-direction fallback rather than hiding a potentially useful live bus/train.
+      if (!liveTripId) {
+        if (matchingLegs.some(leg => directionLooksCompatible(vehicle, leg))) eligible.add(vehicleId);
+        continue;
+      }
+
+      jobs.push({ vehicleId, liveTripId, matchingLegs });
     }
-    if (markers.length) routeState.plannedVehicleLayer = L.layerGroup(markers).addTo(map);
+
+    // Limit concurrent trip lookups on mobile while still validating every candidate.
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(6, jobs.length) }, async () => {
+      while (cursor < jobs.length) {
+        const job = jobs[cursor++];
+        const trip = await fetchLiveTrip(job.liveTripId);
+        if (seq !== routeState.eligibilitySeq) return;
+        if (!trip) continue;
+        if (job.matchingLegs.some(leg => tripStillReachesLeg(trip, leg))) eligible.add(job.vehicleId);
+      }
+    });
+    await Promise.all(workers);
+    if (seq !== routeState.eligibilitySeq) return;
+
+    window.__berlinRouteEligibility = { active: true, ready: true, ids: eligible };
+    if (filter.fitVehiclesOnce) filter.fitVehiclesOnce = true;
+    if (map) map.fire("moveend");
   }
 
-  window.addEventListener("berlin-live-vehicles-updated", syncPlannedVehicleMarkers);
+  let eligibilityTimer = null;
+  window.addEventListener("berlin-live-vehicles-updated", () => {
+    clearTimeout(eligibilityTimer);
+    eligibilityTimer = setTimeout(refreshRouteLiveEligibility, 120);
+  });
 
   function clearPlannedRoute() {
     if (routeState.controller) {
@@ -275,10 +385,10 @@
     }
     const map = window.__berlinLiveMap;
     if (map) for (const layer of routeState.layers) if (layer && map.hasLayer(layer)) map.removeLayer(layer);
-    if (map && routeState.plannedVehicleLayer && map.hasLayer(routeState.plannedVehicleLayer)) map.removeLayer(routeState.plannedVehicleLayer);
-    routeState.plannedVehicleLayer = null;
+    routeState.eligibilitySeq++;
     routeState.layers = [];
     window.__berlinPlannedVehicleFilter={active:false,legs:[]};
+    window.__berlinRouteEligibility={active:false,ready:true,ids:new Set()};
     setRouteFocus(false);
     if(map)map.fire("moveend");
   }
@@ -350,11 +460,15 @@
         const x=Math.cos(toRad(first[0]))*Math.sin(toRad(last[0]))-Math.sin(toRad(first[0]))*Math.cos(toRad(last[0]))*Math.cos(toRad(last[1]-first[1]));
         const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
         const boarding=legPoint(leg?.origin);
+        const alighting=legPoint(leg?.destination);
         const tripId=String(leg?.tripId||leg?.trip?.id||"");
         const line=String(leg?.line?.name||leg?.line?.id||"");
         const lineId=String(leg?.line?.id||"");
         const departure=String(leg?.departure||leg?.plannedDeparture||"");
+        const boardId=String(leg?.origin?.id||leg?.origin?.stop?.id||"");
         const boardName=String(leg?.origin?.name||leg?.origin?.address||"");
+        const alightId=String(leg?.destination?.id||leg?.destination?.stop?.id||"");
+        const alightName=String(leg?.destination?.name||leg?.destination?.address||"");
         const key=tripId||[product,line,lineId,departure,boardName].join("|");
         if(relevantVehicleKeys.has(key))return;
         relevantVehicleKeys.add(key);
@@ -362,9 +476,11 @@
         relevantVehicleLegs.push({
           line,lineId,mode:product,
           direction:String(leg?.direction||leg?.destination?.name||""),
-          tripId,departure,boardName,
+          tripId,departure,boardId,boardName,alightId,alightName,
           boardLat:boarding?Number(boarding[0]):null,
           boardLon:boarding?Number(boarding[1]):null,
+          alightLat:alighting?Number(alighting[0]):null,
+          alightLon:alighting?Number(alighting[1]):null,
           bearing:Number.isFinite(legBearing)?legBearing:null,
           minLat:lats.length?Math.min(...lats)-padLat:null,
           maxLat:lats.length?Math.max(...lats)+padLat:null,
@@ -411,6 +527,8 @@
         fitVehiclesOnce:true,
         routeBounds:bounds.isValid()?{south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()}:null
       };
+      window.__berlinRouteEligibility={active:true,ready:false,ids:new Set()};
+      refreshRouteLiveEligibility();
       syncPlannedVehicleMarkers();
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
       else map.fire("moveend");
@@ -427,7 +545,7 @@
         const product = legProduct(leg), info = modeInfo[product] || modeInfo.regional;
         return `<div class="route-leg"><span class="route-leg-badge" style="--leg-color:${info.c};--leg-fg:${info.fg}">${esc(leg?.line?.name || info.label)}</span><div><b>${esc(leg?.origin?.name || "")}</b> → ${esc(leg?.destination?.name || leg?.direction || "")}<div class="stop-meta">${fmtTime(leg?.departure || leg?.plannedDeparture)} – ${fmtTime(leg?.arrival || leg?.plannedArrival)}</div></div></div>`;
       }).join("");
-      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Beste Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div><div class="detail-key">Verbindungen +60 Min</div><div><b>${hourJourneys.length}</b></div></div><div class="route-chip"><span class="route-line-sample"></span><span>Alle passenden Live-Fahrzeuge bis zum Ziel · Start innerhalb der nächsten 60 Min</span></div><div class="detail-section"><h3>Beste Strecke</h3>${legRows}</div>`;
+      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Beste Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div><div class="detail-key">Verbindungen +60 Min</div><div><b>${hourJourneys.length}</b></div></div><div class="route-chip"><span class="route-line-sample"></span><span>Echte Live-Fahrzeuge, die deinen Einstieg noch erreichen · bis zum Ziel</span></div><div class="detail-section"><h3>Beste Strecke</h3>${legRows}</div>`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       clearPlannedRoute();
