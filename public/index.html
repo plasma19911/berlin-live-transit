@@ -17,10 +17,10 @@
 .side{position:absolute;z-index:999;left:14px;top:86px;width:300px;display:flex;flex-direction:column;gap:9px;pointer-events:none}.panel{pointer-events:auto;border-radius:17px;padding:13px}.panel h2{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#dce7f5}
 .filters{display:grid;grid-template-columns:1fr 1fr;gap:7px}.filter{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:8px;font-size:11px;cursor:pointer}.filter input{accent-color:#45a8ff}.swatch{display:none}.cnt{margin-left:auto;color:var(--muted);font-size:10px}
 .legend-sign{width:23px;height:23px;display:grid;place-items:center;background:var(--lc);color:var(--lf);font-size:10px;font-weight:1000;border-radius:6px;flex:0 0 auto}
-.legend-sign.kind-s{border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #008d4c}
+.legend-sign{border:2px solid #fff;box-shadow:0 0 0 1px rgba(3,10,18,.72),0 2px 5px rgba(0,0,0,.28)}
+.legend-sign.kind-s,.legend-sign.kind-ferry{border-radius:50%}
 .legend-sign.kind-u{font-size:16px}
-.legend-sign.kind-bus,.legend-sign.kind-tram{font-size:14px}
-.legend-sign.kind-ferry{border-radius:50%}
+.legend-sign.kind-bus,.legend-sign.kind-tram{width:30px;font-size:7px;letter-spacing:.02em}
 .search{display:flex;gap:7px}.search input{flex:1;min-width:0;border:1px solid var(--border);background:rgba(255,255,255,.045);color:var(--text);border-radius:11px;padding:9px 10px;outline:none}.btn{border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:11px;padding:8px 10px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.1)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}.stat{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:9px}.stat b{display:block;font-size:17px}.stat span{font-size:9.5px;color:var(--muted)}
 .note{font-size:10px;color:var(--muted);line-height:1.45}.note b{color:#dce8f6}
@@ -34,24 +34,23 @@
 }
 .veh{
   position:relative;
-  min-width:36px;height:34px;
+  min-width:36px;height:36px;
   padding:2px 5px 3px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:var(--c);color:var(--fg);
-  border:0;
+  border:2px solid rgba(255,255,255,.98);
   border-radius:9px;
-  box-shadow:0 3px 8px rgba(0,0,0,.38);
+  box-shadow:0 0 0 1px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.42);
   transition:transform .12s ease,opacity .12s ease;
 }
-.veh.kind-s{
-  min-width:34px;width:34px;height:34px;border-radius:50%;
-  border:2px solid rgba(255,255,255,.95);
-  box-shadow:0 0 0 1px rgba(0,141,76,.9),0 3px 8px rgba(0,0,0,.34);
+body.map-bright .veh{
+  box-shadow:0 0 0 2px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.30);
 }
-.veh.kind-u{min-width:34px;width:34px;height:34px;border-radius:6px}
-.veh.kind-bus,.veh.kind-tram{min-width:38px;height:34px;border-radius:8px}
-.veh.kind-ferry{min-width:34px;width:34px;height:34px;border-radius:50%}
-.veh.kind-regional,.veh.kind-express{min-width:40px;height:34px;border-radius:7px}
+.veh.kind-s{min-width:36px;width:36px;height:36px;border-radius:50%}
+.veh.kind-u{min-width:36px;width:36px;height:36px;border-radius:7px}
+.veh.kind-bus,.veh.kind-tram{min-width:48px;height:40px;border-radius:9px;padding:2px 6px 3px}
+.veh.kind-ferry{min-width:36px;width:36px;height:36px;border-radius:50%}
+.veh.kind-regional,.veh.kind-express{min-width:43px;height:37px;border-radius:8px}
 .veh-symbol{
   min-height:17px;display:grid;place-items:center;
   font-size:15px;line-height:1;font-weight:1000;letter-spacing:-.04em;
@@ -59,15 +58,14 @@
 .kind-s .veh-symbol,.kind-u .veh-symbol{font-size:18px}
 .kind-regional .veh-symbol{font-size:11px}
 .kind-express .veh-symbol{font-size:9px}
-.kind-bus .veh-symbol::before{content:"🚌";font-size:14px}
-.kind-bus .veh-symbol{font-size:0}
-.kind-tram .veh-symbol::before{content:"🚋";font-size:14px}
-.kind-tram .veh-symbol{font-size:0}
+.kind-bus .veh-symbol{font-size:9px;min-height:12px;letter-spacing:.05em}
+.kind-tram .veh-symbol{font-size:8px;min-height:12px;letter-spacing:.035em}
 .veh-line{
-  max-width:38px;overflow:hidden;text-overflow:ellipsis;
-  font-size:8px;line-height:9px;font-weight:1000;white-space:nowrap;text-align:center;
+  max-width:42px;overflow:hidden;text-overflow:ellipsis;
+  font-size:10px;line-height:11px;font-weight:1000;white-space:nowrap;text-align:center;
 }
-.kind-s .veh-line,.kind-u .veh-line{font-size:7px}
+.kind-bus .veh-line,.kind-tram .veh-line{max-width:44px;font-size:11px;line-height:12px}
+.kind-s .veh-line,.kind-u .veh-line{font-size:8px}
 .veh-arrow{
   position:absolute;left:50%;top:-8px;
   width:16px;height:16px;margin-left:-8px;
@@ -81,18 +79,26 @@
   text-shadow:0 1px 3px rgba(0,0,0,.95);
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));
 }
+body.map-bright .veh-arrow{
+  color:#101820;
+  text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));
+}
 .veh-wrap.no-bearing .veh-arrow{display:none}
 .veh-wrap:hover .veh{transform:scale(1.06)}
 .leaflet-zoom-animated .veh{will-change:transform}
 @media(max-width:700px){
   .veh-wrap{width:46px;height:44px}
-  .veh{min-width:32px;height:30px;padding:1px 4px 2px}
-  .veh.kind-s,.veh.kind-u,.veh.kind-ferry{width:30px;height:30px;min-width:30px}
-  .veh.kind-bus,.veh.kind-tram{min-width:34px;height:30px}
-  .veh.kind-regional,.veh.kind-express{min-width:36px;height:30px}
+  .veh{min-width:34px;height:32px;padding:1px 4px 2px}
+  .veh.kind-s,.veh.kind-u,.veh.kind-ferry{width:32px;height:32px;min-width:32px}
+  .veh.kind-bus,.veh.kind-tram{min-width:44px;height:36px;padding:2px 5px}
+  .veh.kind-regional,.veh.kind-express{min-width:39px;height:33px}
   .veh-symbol{font-size:13px;min-height:15px}
   .kind-s .veh-symbol,.kind-u .veh-symbol{font-size:16px}
-  .veh-line{font-size:7px;line-height:8px;max-width:34px}
+  .kind-bus .veh-symbol{font-size:8px;min-height:10px}
+  .kind-tram .veh-symbol{font-size:7px;min-height:10px}
+  .veh-line{font-size:9px;line-height:10px;max-width:38px}
+  .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px;line-height:11px;max-width:40px}
   .veh-arrow{top:-6px;font-size:12px;width:14px;height:14px;margin-left:-7px;transform-origin:50% 25px}
 }
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
@@ -210,10 +216,10 @@
   <div class="map-style-title">Kartenansicht</div>
   <div class="map-style-list">
     <button class="map-style-option" type="button" data-map-style="dark" role="menuitem"><span class="map-style-icon">🌙</span><span><span class="map-style-name">Dark</span><span class="map-style-sub">Dunkel mit Beschriftungen</span></span></button>
-    <button class="map-style-option" type="button" data-map-style="minimal" role="menuitem"><span class="map-style-icon">🌑</span><span><span class="map-style-name">Minimal</span><span class="map-style-sub">Dunkel ohne Beschriftungen</span></span></button>
     <button class="map-style-option" type="button" data-map-style="standard" role="menuitem"><span class="map-style-icon">🗺️</span><span><span class="map-style-name">Standard</span><span class="map-style-sub">Klassische Straßenkarte</span></span></button>
     <button class="map-style-option" type="button" data-map-style="light" role="menuitem"><span class="map-style-icon">☀️</span><span><span class="map-style-name">Hell</span><span class="map-style-sub">Helle, klare Darstellung</span></span></button>
     <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>
+    <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>
   </div>
 </div>
 <div class="controls"><button id="mapStyleToggle" class="btn" type="button" title="Kartenansicht ändern" aria-expanded="false">🗺️</button><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
@@ -235,19 +241,19 @@ const tiles = [
 const modes = {
   suburban:{name:"S-Bahn",kind:"s",c:"#008d4c",fg:"#ffffff",icon:"S"},
   subway:{name:"U-Bahn",kind:"u",c:"#0067b1",fg:"#ffffff",icon:"U"},
-  tram:{name:"Tram",kind:"tram",c:"#f6c900",fg:"#111111",icon:"▥"},
-  bus:{name:"Bus",kind:"bus",c:"#f6c900",fg:"#111111",icon:"▰"},
+  tram:{name:"Tram",kind:"tram",c:"#f6c900",fg:"#111111",icon:"TRAM"},
+  bus:{name:"Bus",kind:"bus",c:"#f6c900",fg:"#111111",icon:"BUS"},
   ferry:{name:"Fähre",kind:"ferry",c:"#0077a8",fg:"#ffffff",icon:"⚓"},
   regional:{name:"Regional",kind:"regional",c:"#e2001a",fg:"#ffffff",icon:"RE"},
   express:{name:"Fernzug",kind:"express",c:"#e2001a",fg:"#ffffff",icon:"ICE"}
 };
 
 const MAP_STYLES={
-  dark:{name:"Dark",url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
-  minimal:{name:"Minimal",url:"https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
-  standard:{name:"Standard",url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
-  light:{name:"Hell",url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
-  voyager:{name:"Voyager",url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}}
+  dark:{name:"Dark",bright:false,url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  standard:{name:"Standard",bright:true,url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
+  light:{name:"Hell",bright:true,url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  voyager:{name:"Voyager",bright:true,url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"}}
 };
 
 const map = L.map("map",{zoomControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);
@@ -293,6 +299,8 @@ function setMapStyle(key,{save=true,closeMenu=true}={}){
   if(baseLayer&&map.hasLayer(baseLayer))map.removeLayer(baseLayer);
   baseLayer=next;
   currentMapStyle=key;
+  document.body.classList.toggle("map-bright",Boolean(style.bright));
+  document.body.classList.toggle("map-satellite",key==="satellite");
 
   document.querySelectorAll("[data-map-style]").forEach(btn=>{
     btn.classList.toggle("active",btn.dataset.mapStyle===key);
@@ -770,7 +778,7 @@ function buildFilters(){
   Object.entries(modes).forEach(([key,m])=>{
     const el=document.createElement("label"); el.className="filter";
     el.innerHTML=`<input type="checkbox" checked data-mode="${key}">
-      <span class="legend-sign kind-${m.kind}" style="--lc:${m.c};--lf:${m.fg}">${m.kind==="bus"?"🚌":m.kind==="tram"?"🚋":m.icon}</span>
+      <span class="legend-sign kind-${m.kind}" style="--lc:${m.c};--lf:${m.fg}">${m.icon}</span>
       <span>${m.name}</span><span class="cnt" id="c-${key}">0</span>`;
     root.appendChild(el);
   });
@@ -796,10 +804,13 @@ function createVehicleLayer(d,mode){
   if(mode==="dots"){
     const marker=L.circleMarker([d.lat,d.lon],{
       pane:"vehiclePane",
-      radius:3.2,
-      stroke:false,
+      radius:3.6,
+      stroke:true,
+      color:"#ffffff",
+      weight:1.4,
+      opacity:1,
       fillColor:modes[d.mode].c,
-      fillOpacity:.88,
+      fillOpacity:.95,
       bubblingMouseEvents:false
     });
     marker.on("click",()=>loadTripDetails(d));
