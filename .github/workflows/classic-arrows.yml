@@ -1,0 +1,48 @@
+name: Bigger classic direction arrows
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/classic-arrows.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore classic larger arrows
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text(encoding='utf-8')
+          old='''.veh-arrow{\n  position:absolute;left:50%;top:-12px;\n  width:22px;height:22px;margin-left:-11px;\n  display:grid;place-items:center;\n  color:#fff;background:rgba(5,10,18,.96);\n  border:2px solid #fff;border-radius:50%;\n  font-size:17px;line-height:18px;font-weight:1000;\n  transform:rotate(var(--bearing,0deg));\n  transform-origin:50% 36px;\n  transition:transform .25s ease;\n  pointer-events:none;\n  text-shadow:none;\n  box-shadow:0 0 0 1px rgba(0,0,0,.68),0 2px 7px rgba(0,0,0,.62);\n  filter:none;\n}\nbody.map-bright .veh-arrow{\n  color:#fff;background:rgba(5,10,18,.96);\n  border-color:#fff;text-shadow:none;filter:none;\n}'''
+          new='''.veh-arrow{\n  position:absolute;left:50%;top:-10px;\n  width:20px;height:20px;margin-left:-10px;\n  display:grid;place-items:center;\n  color:#f2f4f7;\n  font-size:18px;line-height:1;font-weight:1000;\n  transform:rotate(var(--bearing,0deg));\n  transform-origin:50% 31px;\n  transition:transform .25s ease;\n  pointer-events:none;\n  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);\n  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));\n}\nbody.map-bright .veh-arrow{\n  color:#5a6470;\n  text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);\n  filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));\n}'''
+          assert old in s
+          s=s.replace(old,new,1)
+          s=s.replace('.veh-arrow{top:-11px;font-size:16px;line-height:16px;width:20px;height:20px;margin-left:-10px;transform-origin:50% 33px}', '.veh-arrow{top:-8px;font-size:17px;line-height:1;width:18px;height:18px;margin-left:-9px;transform-origin:50% 27px}', 1)
+          s=s.replace('title="Fahrtrichtung">↑</span>', 'title="Fahrtrichtung">▲</span>', 1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('public/index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/index-inline.js').write_text(max(blocks,key=len),encoding='utf-8')
+          PY
+          node --check /tmp/index-inline.js
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/classic-arrows.yml
+          git add public/index.html
+          git diff --cached --check
+          git commit -m "Restore larger classic direction arrows"
+          git push
