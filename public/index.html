@@ -202,6 +202,9 @@ body.map-bright .veh-arrow{
 .zoom-far .kind-s .veh-symbol,.zoom-far .kind-u .veh-symbol{font-size:15px}
 .zoom-far .veh-arrow{--arrow-offset:-25px;top:50%;font-size:16px;width:18px;height:18px;margin:0;transform-origin:50% 50%;z-index:5}
 .zoom-mid .veh-line{font-size:7px}
+.zoom-mid .veh-wrap{transform:scale(.65);transform-origin:50% 50%}
+.zoom-near .veh-wrap{transform:scale(.78);transform-origin:50% 50%}
+@media(max-width:700px){.zoom-mid .veh-wrap{transform:scale(.55)}.zoom-near .veh-wrap{transform:scale(.68)}}
 /* Progressive overview sizing: the farther out, the smaller the vehicle marker. */
 .zoom-overview-11 .veh-wrap{
   transform:scale(.50);
@@ -875,6 +878,7 @@ function updateMarkerDensity(){
   el.classList.toggle("zoom-overview-10",z===10);
   el.classList.toggle("zoom-overview-11",z===11);
   el.classList.toggle("zoom-mid",z===12||z===13);
+  el.classList.toggle("zoom-near",z>=14);
 }
 map.on("zoomend",()=>{updateMarkerDensity();renderVehicles()});
 map.on("moveend",renderVehicles);
