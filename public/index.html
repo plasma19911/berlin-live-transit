@@ -202,13 +202,18 @@ body.map-bright .veh-arrow{
 .zoom-far .kind-s .veh-symbol,.zoom-far .kind-u .veh-symbol{font-size:15px}
 .zoom-far .veh-arrow{--arrow-offset:-25px;top:50%;font-size:16px;width:18px;height:18px;margin:0;transform-origin:50% 50%;z-index:5}
 .zoom-mid .veh-line{font-size:7px}
-/* Compact overview at the initial Berlin zoom: keep the map readable while preserving real icons + arrows. */
-.zoom-overview .veh-wrap{
-  transform:scale(.62);
+/* Progressive overview sizing: the farther out, the smaller the vehicle marker. */
+.zoom-overview-11 .veh-wrap{
+  transform:scale(.50);
+  transform-origin:50% 50%;
+}
+.zoom-overview-10 .veh-wrap{
+  transform:scale(.38);
   transform-origin:50% 50%;
 }
 @media(max-width:700px){
-  .zoom-overview .veh-wrap{transform:scale(.52)}
+  .zoom-overview-11 .veh-wrap{transform:scale(.42)}
+  .zoom-overview-10 .veh-wrap{transform:scale(.30)}
 }
 /* mobile-readability-fix */
 .controls{
@@ -867,7 +872,8 @@ function updateMarkerDensity(){
   const z=map.getZoom();
   const el=document.getElementById("map");
   el.classList.toggle("zoom-far",z<=9);
-  el.classList.toggle("zoom-overview",z===10||z===11);
+  el.classList.toggle("zoom-overview-10",z===10);
+  el.classList.toggle("zoom-overview-11",z===11);
   el.classList.toggle("zoom-mid",z===12||z===13);
 }
 map.on("zoomend",()=>{updateMarkerDensity();renderVehicles()});
@@ -1024,7 +1030,7 @@ function renderVehicles(){
   const zoom=map.getZoom();
   const routeFilter=window.__berlinPlannedVehicleFilter;
   const plannedFilterActive=Boolean(routeFilter?.active&&Array.isArray(routeFilter.legs)&&routeFilter.legs.length);
-  const mode=plannedFilterActive?"icons":(zoom<=9?"dots":"icons");
+  const mode=zoom<=9?"dots":"icons";
   const bounds=map.getBounds().pad(plannedFilterActive?0.80:(zoom<=9?0.03:0.12));
   const wanted=new Set();
   let visible=0;
