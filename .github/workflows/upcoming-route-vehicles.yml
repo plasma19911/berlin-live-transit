@@ -1,0 +1,25 @@
+name: Upcoming route vehicles
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/upcoming-route-vehicles.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply upcoming vehicle patch
+        run: python .github/upcoming_route_vehicles_patch.py
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Show upcoming vehicles before boarding stops"
+          git push
