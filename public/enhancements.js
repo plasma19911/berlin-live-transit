@@ -125,7 +125,7 @@
   const modeInfo = {
     suburban: { c: "#008d4c", fg: "#fff", label: "S" },
     subway: { c: "#0067b1", fg: "#fff", label: "U" },
-    tram: { c: "#f6c900", fg: "#111", label: "TRAM" },
+    tram: { c: "#ff8a00", fg: "#111", label: "TRAM" },
     bus: { c: "#f6c900", fg: "#111", label: "BUS" },
     ferry: { c: "#0077a8", fg: "#fff", label: "F" },
     regional: { c: "#e2001a", fg: "#fff", label: "RE" },
