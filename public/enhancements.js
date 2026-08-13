@@ -537,7 +537,6 @@
       };
       window.__berlinRouteEligibility={active:true,ready:false,ids:new Set()};
       refreshRouteLiveEligibility();
-      syncPlannedVehicleMarkers();
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
       else map.fire("moveend");
 
