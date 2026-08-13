@@ -81,12 +81,13 @@ body.map-bright .veh{
 .kind-replacement .veh-line{max-width:46px;font-size:10px;line-height:11px}
 .kind-s .veh-line,.kind-u .veh-line{font-size:8px}
 .veh-arrow{
-  position:absolute;left:50%;top:-10px;
-  width:20px;height:20px;margin-left:-10px;
+  --arrow-offset:-33px;
+  position:absolute;left:50%;top:50%;
+  width:20px;height:20px;margin:0;
   display:grid;place-items:center;
   color:#f2f4f7;
   font-size:18px;line-height:1;font-weight:1000;
-  transform:rotate(var(--bearing,0deg));
+  transform:translate(-50%,-50%) rotate(var(--bearing,0deg)) translateY(var(--arrow-offset));
   transform-origin:50% 50%;
   transition:transform .25s ease;
   pointer-events:none;
@@ -117,7 +118,7 @@ body.map-bright .veh-arrow{
   .veh-line{font-size:9px;line-height:10px;max-width:38px}
   .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px;line-height:11px;max-width:40px}
   .kind-replacement .veh-line{font-size:9px;line-height:10px;max-width:42px}
-  .veh-arrow{top:-8px;font-size:17px;line-height:1;width:18px;height:18px;margin-left:-9px;transform-origin:50% 27px}
+  .veh-arrow{--arrow-offset:-31px;top:50%;font-size:17px;line-height:1;width:18px;height:18px;margin:0;transform-origin:50% 50%}
 }
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
 .warn{position:absolute;z-index:1001;left:50%;bottom:26px;transform:translateX(-50%);max-width:min(650px,calc(100% - 30px));padding:10px 13px;border-radius:12px;background:rgba(54,34,10,.94);border:1px solid rgba(255,209,102,.3);color:#ffe4a1;font-size:11px;display:none}.warn.show{display:block}
@@ -199,7 +200,7 @@ body.map-bright .veh-arrow{
 .zoom-far .veh.kind-s,.zoom-far .veh.kind-u,.zoom-far .veh.kind-ferry{width:27px;height:27px;min-width:27px}
 .zoom-far .veh-symbol{font-size:13px;min-height:13px}
 .zoom-far .kind-s .veh-symbol,.zoom-far .kind-u .veh-symbol{font-size:15px}
-.zoom-far .veh-arrow{top:-8px;font-size:16px;width:18px;height:18px;margin-left:-9px;transform-origin:50% 50%;z-index:5}
+.zoom-far .veh-arrow{--arrow-offset:-25px;top:50%;font-size:16px;width:18px;height:18px;margin:0;transform-origin:50% 50%;z-index:5}
 .zoom-mid .veh-line{font-size:7px}
 /* mobile-readability-fix */
 .controls{
