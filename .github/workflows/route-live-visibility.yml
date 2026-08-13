@@ -1,0 +1,25 @@
+name: Route live vehicle visibility
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/route-live-visibility.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply visibility patch
+        run: python .github/route_vehicle_visibility_patch.py
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Keep relevant live vehicles visible on planned route"
+          git push
