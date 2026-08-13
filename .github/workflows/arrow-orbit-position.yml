@@ -19,49 +19,18 @@ jobs:
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-
-          old='''.veh-arrow{
-  position:absolute;left:50%;top:-10px;
-  width:20px;height:20px;margin-left:-10px;
-  display:grid;place-items:center;
-  color:#f2f4f7;
-  font-size:18px;line-height:1;font-weight:1000;
-  transform:rotate(var(--bearing,0deg));
-  transform-origin:50% 50%;
-  transition:transform .25s ease;
-  pointer-events:none;
-  z-index:5;
-  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
-}'''
-          new='''.veh-arrow{
-  --arrow-offset:-33px;
-  position:absolute;left:50%;top:50%;
-  width:20px;height:20px;margin:0;
-  display:grid;place-items:center;
-  color:#f2f4f7;
-  font-size:18px;line-height:1;font-weight:1000;
-  transform:translate(-50%,-50%) rotate(var(--bearing,0deg)) translateY(var(--arrow-offset));
-  transform-origin:50% 50%;
-  transition:transform .25s ease;
-  pointer-events:none;
-  z-index:5;
-  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
-}'''
+          old=".veh-arrow{\n  position:absolute;left:50%;top:-10px;\n  width:20px;height:20px;margin-left:-10px;\n  display:grid;place-items:center;\n  color:#f2f4f7;\n  font-size:18px;line-height:1;font-weight:1000;\n  transform:rotate(var(--bearing,0deg));\n  transform-origin:50% 50%;\n  transition:transform .25s ease;\n  pointer-events:none;\n  z-index:5;\n  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);\n  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));\n}"
+          new=".veh-arrow{\n  --arrow-offset:-33px;\n  position:absolute;left:50%;top:50%;\n  width:20px;height:20px;margin:0;\n  display:grid;place-items:center;\n  color:#f2f4f7;\n  font-size:18px;line-height:1;font-weight:1000;\n  transform:translate(-50%,-50%) rotate(var(--bearing,0deg)) translateY(var(--arrow-offset));\n  transform-origin:50% 50%;\n  transition:transform .25s ease;\n  pointer-events:none;\n  z-index:5;\n  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);\n  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));\n}"
           assert old in s, 'main arrow block not found'
           s=s.replace(old,new,1)
-
-          old='''.veh-arrow{top:-8px;font-size:17px;line-height:1;width:18px;height:18px;margin-left:-9px;transform-origin:50% 27px}'''
-          new='''.veh-arrow{--arrow-offset:-31px;top:50%;font-size:17px;line-height:1;width:18px;height:18px;margin:0;transform-origin:50% 50%}'''
+          old=".veh-arrow{top:-8px;font-size:17px;line-height:1;width:18px;height:18px;margin-left:-9px;transform-origin:50% 27px}"
+          new=".veh-arrow{--arrow-offset:-31px;top:50%;font-size:17px;line-height:1;width:18px;height:18px;margin:0;transform-origin:50% 50%}"
           assert old in s, 'mobile arrow override not found'
           s=s.replace(old,new,1)
-
-          old='''.zoom-far .veh-arrow{top:-8px;font-size:16px;width:18px;height:18px;margin-left:-9px;transform-origin:50% 50%;z-index:5}'''
-          new='''.zoom-far .veh-arrow{--arrow-offset:-25px;top:50%;font-size:16px;width:18px;height:18px;margin:0;transform-origin:50% 50%;z-index:5}'''
+          old=".zoom-far .veh-arrow{top:-8px;font-size:16px;width:18px;height:18px;margin-left:-9px;transform-origin:50% 50%;z-index:5}"
+          new=".zoom-far .veh-arrow{--arrow-offset:-25px;top:50%;font-size:16px;width:18px;height:18px;margin:0;transform-origin:50% 50%;z-index:5}"
           assert old in s, 'zoom-far arrow override not found'
           s=s.replace(old,new,1)
-
           assert 'title="Fahrtrichtung">▲</span>' in s
           p.write_text(s,encoding='utf-8')
           PY
