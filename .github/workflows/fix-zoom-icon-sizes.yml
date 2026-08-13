@@ -19,46 +19,18 @@ jobs:
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-
-          old='''/* Compact overview at the initial Berlin zoom: keep the map readable while preserving real icons + arrows. */
-.zoom-overview .veh-wrap{
-  transform:scale(.62);
-  transform-origin:50% 50%;
-}
-@media(max-width:700px){
-  .zoom-overview .veh-wrap{transform:scale(.52)}
-}'''
-          new='''/* Progressive overview sizing: the farther out, the smaller the vehicle marker. */
-.zoom-overview-11 .veh-wrap{
-  transform:scale(.50);
-  transform-origin:50% 50%;
-}
-.zoom-overview-10 .veh-wrap{
-  transform:scale(.38);
-  transform-origin:50% 50%;
-}
-@media(max-width:700px){
-  .zoom-overview-11 .veh-wrap{transform:scale(.42)}
-  .zoom-overview-10 .veh-wrap{transform:scale(.30)}
-}'''
+          old="/* Compact overview at the initial Berlin zoom: keep the map readable while preserving real icons + arrows. */\n.zoom-overview .veh-wrap{\n  transform:scale(.62);\n  transform-origin:50% 50%;\n}\n@media(max-width:700px){\n  .zoom-overview .veh-wrap{transform:scale(.52)}\n}"
+          new="/* Progressive overview sizing: the farther out, the smaller the vehicle marker. */\n.zoom-overview-11 .veh-wrap{\n  transform:scale(.50);\n  transform-origin:50% 50%;\n}\n.zoom-overview-10 .veh-wrap{\n  transform:scale(.38);\n  transform-origin:50% 50%;\n}\n@media(max-width:700px){\n  .zoom-overview-11 .veh-wrap{transform:scale(.42)}\n  .zoom-overview-10 .veh-wrap{transform:scale(.30)}\n}"
           assert old in s, 'overview CSS block not found'
           s=s.replace(old,new,1)
-
-          old='''  el.classList.toggle("zoom-far",z<=9);
-  el.classList.toggle("zoom-overview",z===10||z===11);
-  el.classList.toggle("zoom-mid",z===12||z===13);'''
-          new='''  el.classList.toggle("zoom-far",z<=9);
-  el.classList.toggle("zoom-overview-10",z===10);
-  el.classList.toggle("zoom-overview-11",z===11);
-  el.classList.toggle("zoom-mid",z===12||z===13);'''
+          old='  el.classList.toggle("zoom-far",z<=9);\n  el.classList.toggle("zoom-overview",z===10||z===11);\n  el.classList.toggle("zoom-mid",z===12||z===13);'
+          new='  el.classList.toggle("zoom-far",z<=9);\n  el.classList.toggle("zoom-overview-10",z===10);\n  el.classList.toggle("zoom-overview-11",z===11);\n  el.classList.toggle("zoom-mid",z===12||z===13);'
           assert old in s, 'marker density class block not found'
           s=s.replace(old,new,1)
-
-          old='''  const mode=plannedFilterActive?"icons":(zoom<=9?"dots":"icons");'''
-          new='''  const mode=zoom<=9?"dots":"icons";'''
+          old='  const mode=plannedFilterActive?"icons":(zoom<=9?"dots":"icons");'
+          new='  const mode=zoom<=9?"dots":"icons";'
           assert old in s, 'render mode block not found'
           s=s.replace(old,new,1)
-
           p.write_text(s,encoding='utf-8')
           PY
       - name: Validate
