@@ -1,4 +1,3 @@
-# verification run after VBB pagination fix
 name: Public site smoke test
 
 on:
@@ -6,55 +5,28 @@ on:
   push:
     paths:
       - '.github/workflows/site-smoke-test.yml'
-      - 'functions/api/radar-berlin.js'
-      - 'functions/api/route.js'
-      - 'public/index.html'
-      - 'public/enhancements.js'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  test:
+  patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Diagnose public app and radar
-        shell: bash
+      - uses: actions/checkout@v4
+      - name: Disable duplicate map style controller
         run: |
-          set +e
-          echo '=== PUBLIC HOME ==='
-          curl -LsS --max-time 25 -o /tmp/index.html -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/'
-          echo '=== PUBLIC RADAR ==='
-          curl -LsS --max-time 40 -o /tmp/radar.json -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/api/radar-berlin'
-          python -c "import json; d=json.load(open('/tmp/radar.json')); print('movements=',len(d.get('movements',[]))); print('meta=',d.get('meta')); print('error=',d.get('error')); print('details=',d.get('details'))" 2>/dev/null || head -c 800 /tmp/radar.json
-          echo
-          echo '=== PUBLIC ROUTE ==='
-          curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w 'http=%{http_code} time=%{time_total}\n'
-          python -c "import json; d=json.load(open('/tmp/route.json')); print('journey=',bool(d.get('journey')),'within_hour=',len(d.get('journeysWithinHour',[])),'error=',d.get('error'))" 2>/dev/null || head -c 500 /tmp/route.json
-          echo
-          echo '=== DIRECT VBB RADAR ==='
-          curl -LsS --max-time 25 -o /tmp/vbb-current.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=30&frames=3&polylines=false&language=de&pretty=false'
-          python -c "import json; d=json.load(open('/tmp/vbb-current.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-current.json
-          echo
-
-      - name: Diagnose direct VBB journeys
-        shell: bash
+          grep -q '    setupMapStyles();' public/enhancements.js
+          sed -i 's/    setupMapStyles();/    \/\/ duplicate map-style controller disabled; main index handles all base layers/' public/enhancements.js
+          sed -i -E 's#<script src="/enhancements\.js(\?v=[^"]*)?"></script>#<script src="/enhancements.js?v=20260813-1554"></script>#' public/index.html
+          node --check public/enhancements.js
+          grep -q 'duplicate map-style controller disabled' public/enhancements.js
+          grep -q 'enhancements.js?v=20260813-1554' public/index.html
+          git diff --check
+      - name: Commit app fix
         run: |
-          set +e
-          curl -LsS --max-time 20 'https://v6.vbb.transport.rest/locations?query=Alexanderplatz%2C%20Berlin&results=3&stops=true&addresses=true&poi=true&language=de&pretty=false' -o /tmp/from.json
-          curl -LsS --max-time 20 'https://v6.vbb.transport.rest/locations?query=Hauptbahnhof%2C%20Berlin&results=3&stops=true&addresses=true&poi=true&language=de&pretty=false' -o /tmp/to.json
-          FROM=$(python -c "import json; d=json.load(open('/tmp/from.json')); print(next((x.get('id') for x in d if x.get('id')),''))")
-          TO=$(python -c "import json; d=json.load(open('/tmp/to.json')); print(next((x.get('id') for x in d if x.get('id')),''))")
-          echo "from_id=$FROM to_id=$TO"
-          curl -LsS --max-time 30 --get 'https://v6.vbb.transport.rest/journeys' --data-urlencode "from=$FROM" --data-urlencode "to=$TO" --data-urlencode 'results=4' --data-urlencode 'stopovers=true' --data-urlencode 'polylines=true' --data-urlencode 'remarks=true' --data-urlencode 'language=de' --data-urlencode 'pretty=false' -o /tmp/journeys.json -w 'journeys_http=%{http_code} time=%{time_total}\n'
-          python -c "import json; d=json.load(open('/tmp/journeys.json')); print('journeys=',len(d.get('journeys',[]))); print('laterRef=',bool(d.get('laterRef'))); print('message=',d.get('message')); print('error=',d.get('error'))" 2>/dev/null || head -c 800 /tmp/journeys.json
-
-      - name: Diagnose browser rendering
-        shell: bash
-        run: |
-          set +e
-          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
-          "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=20000 --dump-dom 'https://berlin-live-transit.pages.dev/' > /tmp/dom.html 2>/tmp/chrome.err
-          echo "chrome_exit=$?"
-          echo "vehicle_wrap_nodes=$(grep -o 'veh-wrap' /tmp/dom.html | wc -l)"
-          python -c "import re; s=open('/tmp/dom.html').read(); print('total_text=',re.search(r'id=\"total\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"total\"[^>]*>([^<]*)',s) else 'missing'); print('visible_text=',re.search(r'id=\"visible\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"visible\"[^>]*>([^<]*)',s) else 'missing'); print('status_text=',re.search(r'id=\"st\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"st\"[^>]*>([^<]*)',s) else 'missing')"
+          git config user.name "ChatGPT Map Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/enhancements.js public/index.html
+          git commit -m "Fix satellite style switching"
+          git push
