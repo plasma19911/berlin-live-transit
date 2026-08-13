@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090d14">
-<title>Berlin Live Transit · Optimiert Radar</title>
+<title>Berlin Live Transit · Optimiert Radar · Multi-Select Fix</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{color-scheme:dark;--bg:#080c12;--panel:rgba(12,18,28,.94);--border:rgba(255,255,255,.11);--text:#eef5ff;--muted:#97a8bc;--ok:#42dc93;--err:#ff6c75;--warn:#ffd166}
@@ -247,7 +247,7 @@ map.createPane("tripStopPane");
 map.getPane("tripStopPane").style.zIndex="640";
 map.getPane("tripStopPane").style.pointerEvents="auto";
 
-const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,routeLayer:null,stopLayer:null,renderMode:null};
+const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,routeLayer:null,stopLayer:null,renderMode:null,tripController:null,selectionSeq:0};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 
@@ -393,6 +393,22 @@ function clearTripLayers(){
   if(state.stopLayer){map.removeLayer(state.stopLayer);state.stopLayer=null}
 }
 
+function cancelTripRequest(){
+  state.selectionSeq++;
+  if(state.tripController){
+    try{state.tripController.abort()}catch(_){}
+    state.tripController=null;
+  }
+}
+
+function closeTripDetails(){
+  cancelTripRequest();
+  state.selected=null;
+  clearTripLayers();
+  $("detailPanel").classList.remove("show");
+  document.body.classList.remove("detail-open");
+}
+
 function stopLocation(stopover){
   const p=stopover?.stop?.location||stopover?.location;
   if(!p)return null;
@@ -420,25 +436,38 @@ function flattenPolyline(poly){
 
 async function loadTripDetails(d){
   const tripId=d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id;
+
+  // A new vehicle selection always replaces the previous one immediately.
+  cancelTripRequest();
+  clearTripLayers();
+  state.selected=d.id;
+  const selectionSeq=state.selectionSeq;
+
   $("detailPanel").classList.add("show");
   document.body.classList.add("detail-open");
   $("detailTitle").textContent=`${modes[d.mode]?.icon||""} ${d.line}`;
   $("detailSub").textContent=`${modes[d.mode]?.name||""} · ${d.raw?.direction||d.raw?.destination?.name||"Richtung unbekannt"}`;
   $("detailBody").innerHTML='<div class="detail-loading">Fahrtdetails werden geladen …</div>';
-  clearTripLayers();
 
   if(!tripId){
     $("detailBody").innerHTML='<div class="note">Für dieses Radar-Fahrzeug wurde keine Trip-ID geliefert. Deshalb können keine Haltestellen oder Verspätungen nachgeladen werden.</div>';
     return;
   }
 
+  const controller=new AbortController();
+  state.tripController=controller;
+  const isCurrent=()=>state.selectionSeq===selectionSeq&&state.selected===d.id&&!controller.signal.aborted;
+
   try{
     const r=await fetch(`/api/trip?id=${encodeURIComponent(tripId)}`,{
-      cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"}
+      cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal
     });
     const text=await r.text();
+    if(!isCurrent())return;
     if(!r.ok)throw new Error(`HTTP ${r.status}: ${text.slice(0,120)}`);
     const json=JSON.parse(text);
+    if(!isCurrent())return;
+
     const trip=json.trip||json;
     const stops=Array.isArray(trip.stopovers)?trip.stopovers:[];
     const now=Date.now();
@@ -457,6 +486,7 @@ async function loadTripDetails(d){
     const upcoming=stops.slice(nextIndex,nextIndex+10);
     const bearingText=["N","NO","O","SO","S","SW","W","NW"][Math.round((d.bearing||0)/45)%8];
 
+    if(!isCurrent())return;
     $("detailBody").innerHTML=`
       <div class="detail-grid">
         <div class="detail-key">Ziel</div><div>${esc(d.raw?.direction||trip.direction||"—")}</div>
@@ -494,6 +524,7 @@ async function loadTripDetails(d){
         }).join(""):'<div class="note">Keine Stopover-Daten verfügbar.</div>'}
       </div>`;
 
+    if(!isCurrent())return;
     const allStopEntries=stops
       .map((s,index)=>({s,p:stopLocation(s),index}))
       .filter(x=>x.p);
@@ -508,6 +539,7 @@ async function loadTripDetails(d){
       routeSource="stops";
     }
 
+    if(!isCurrent())return;
     if(coords.length>1){
       const routeColor=modes[d.mode]?.c||"#4da8ff";
 
@@ -534,7 +566,7 @@ async function loadTripDetails(d){
       state.routeLayer=L.layerGroup([halo,mainLine]).addTo(map);
     }
 
-    if(allStopEntries.length){
+    if(allStopEntries.length&&isCurrent()){
       const stopMarkers=allStopEntries.map(({s,p,index})=>{
         const isNext=index===nextIndex;
         const isPast=index<nextIndex;
@@ -556,6 +588,7 @@ async function loadTripDetails(d){
       state.stopLayer=L.layerGroup(stopMarkers).addTo(map);
     }
 
+    if(!isCurrent())return;
     const routeBounds=L.latLngBounds([
       ...coords,
       ...allStopEntries.map(x=>x.p)
@@ -572,14 +605,17 @@ async function loadTripDetails(d){
     }
 
     const routeChip=$("detailBody").querySelector(".route-chip span:last-child");
-    if(routeChip){
+    if(routeChip&&isCurrent()){
       routeChip.textContent=routeSource==="original"
         ?"Linienverlauf + Haltestellen auf der Karte"
         :"Vereinfachter Verlauf über Haltestellen";
     }
   }catch(e){
+    if(e?.name==="AbortError"||!isCurrent())return;
     console.error("Trip-Details:",e);
     $("detailBody").innerHTML=`<div class="note">Fahrtdetails konnten nicht geladen werden: ${esc(e.message)}</div>`;
+  }finally{
+    if(state.tripController===controller)state.tripController=null;
   }
 }
 
@@ -811,7 +847,10 @@ async function refresh(){
 }
 
 function doSearch(){
-  state.query=$("q").value.trim().toLowerCase();apply();
+  // A new search is a new navigation action: stop the old trip request and route first.
+  if(state.selected||state.tripController||state.routeLayer||state.stopLayer)closeTripDetails();
+  state.query=$("q").value.trim().toLowerCase();
+  apply();
   const a=[...state.vehicles.values()].filter(d=>state.enabled.has(d.mode)&&(!state.query||d.search.includes(state.query)));
   if(state.query&&a.length){
     const b=L.latLngBounds(a.map(d=>[d.lat,d.lon]));
@@ -839,12 +878,7 @@ function locateMe(){
 }
 
 buildFilters();
-$("detailClose").addEventListener("click",()=>{
-  $("detailPanel").classList.remove("show");
-  document.body.classList.remove("detail-open");
-  state.selected=null;
-  clearTripLayers();
-});
+$("detailClose").addEventListener("click",closeTripDetails);
 $("refresh").addEventListener("click",refresh);
 $("gps").addEventListener("click",locateMe);
 $("home").addEventListener("click",()=>map.setView(CENTER,11));
