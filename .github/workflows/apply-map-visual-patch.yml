@@ -1,0 +1,192 @@
+name: Apply map visual patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-map-visual-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch map styles and vehicle markers
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          def rep(old, new, label):
+              global s
+              c = s.count(old)
+              if c != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {c}')
+              s = s.replace(old, new, 1)
+
+          rep(
+          '''.legend-sign.kind-s{border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #008d4c}
+          .legend-sign.kind-u{font-size:16px}
+          .legend-sign.kind-bus,.legend-sign.kind-tram{font-size:14px}
+          .legend-sign.kind-ferry{border-radius:50%}''',
+          '''.legend-sign{border:2px solid #fff;box-shadow:0 0 0 1px rgba(3,10,18,.72),0 2px 5px rgba(0,0,0,.28)}
+          .legend-sign.kind-s,.legend-sign.kind-ferry{border-radius:50%}
+          .legend-sign.kind-u{font-size:16px}
+          .legend-sign.kind-bus,.legend-sign.kind-tram{width:30px;font-size:7px;letter-spacing:.02em}''',
+          'legend')
+
+          rep('min-width:36px;height:34px;', 'min-width:36px;height:36px;', 'vehicle height')
+          rep('  border:0;\n  border-radius:9px;\n  box-shadow:0 3px 8px rgba(0,0,0,.38);',
+              '  border:2px solid rgba(255,255,255,.98);\n  border-radius:9px;\n  box-shadow:0 0 0 1px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.42);',
+              'vehicle border')
+          rep('''.veh.kind-s{
+            min-width:34px;width:34px;height:34px;border-radius:50%;
+            border:2px solid rgba(255,255,255,.95);
+            box-shadow:0 0 0 1px rgba(0,141,76,.9),0 3px 8px rgba(0,0,0,.34);
+          }
+          .veh.kind-u{min-width:34px;width:34px;height:34px;border-radius:6px}
+          .veh.kind-bus,.veh.kind-tram{min-width:38px;height:34px;border-radius:8px}
+          .veh.kind-ferry{min-width:34px;width:34px;height:34px;border-radius:50%}
+          .veh.kind-regional,.veh.kind-express{min-width:40px;height:34px;border-radius:7px}''',
+          '''body.map-bright .veh{
+            box-shadow:0 0 0 2px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.30);
+          }
+          .veh.kind-s{min-width:36px;width:36px;height:36px;border-radius:50%}
+          .veh.kind-u{min-width:36px;width:36px;height:36px;border-radius:7px}
+          .veh.kind-bus,.veh.kind-tram{min-width:48px;height:40px;border-radius:9px;padding:2px 6px 3px}
+          .veh.kind-ferry{min-width:36px;width:36px;height:36px;border-radius:50%}
+          .veh.kind-regional,.veh.kind-express{min-width:43px;height:37px;border-radius:8px}''',
+          'vehicle variants')
+
+          rep('''.kind-bus .veh-symbol::before{content:"🚌";font-size:14px}
+          .kind-bus .veh-symbol{font-size:0}
+          .kind-tram .veh-symbol::before{content:"🚋";font-size:14px}
+          .kind-tram .veh-symbol{font-size:0}
+          .veh-line{
+            max-width:38px;overflow:hidden;text-overflow:ellipsis;
+            font-size:8px;line-height:9px;font-weight:1000;white-space:nowrap;text-align:center;
+          }
+          .kind-s .veh-line,.kind-u .veh-line{font-size:7px}''',
+          '''.kind-bus .veh-symbol{font-size:9px;min-height:12px;letter-spacing:.05em}
+          .kind-tram .veh-symbol{font-size:8px;min-height:12px;letter-spacing:.035em}
+          .veh-line{
+            max-width:42px;overflow:hidden;text-overflow:ellipsis;
+            font-size:10px;line-height:11px;font-weight:1000;white-space:nowrap;text-align:center;
+          }
+          .kind-bus .veh-line,.kind-tram .veh-line{max-width:44px;font-size:11px;line-height:12px}
+          .kind-s .veh-line,.kind-u .veh-line{font-size:8px}''',
+          'bus tram labels')
+
+          rep('''  filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));
+          }
+          .veh-wrap.no-bearing .veh-arrow''',
+          '''  filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));
+          }
+          body.map-bright .veh-arrow{
+            color:#101820;
+            text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);
+            filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));
+          }
+          .veh-wrap.no-bearing .veh-arrow''',
+          'bright arrow')
+
+          rep('''  .veh{min-width:32px;height:30px;padding:1px 4px 2px}
+            .veh.kind-s,.veh.kind-u,.veh.kind-ferry{width:30px;height:30px;min-width:30px}
+            .veh.kind-bus,.veh.kind-tram{min-width:34px;height:30px}
+            .veh.kind-regional,.veh.kind-express{min-width:36px;height:30px}
+            .veh-symbol{font-size:13px;min-height:15px}
+            .kind-s .veh-symbol,.kind-u .veh-symbol{font-size:16px}
+            .veh-line{font-size:7px;line-height:8px;max-width:34px}''',
+          '''  .veh{min-width:34px;height:32px;padding:1px 4px 2px}
+            .veh.kind-s,.veh.kind-u,.veh.kind-ferry{width:32px;height:32px;min-width:32px}
+            .veh.kind-bus,.veh.kind-tram{min-width:44px;height:36px;padding:2px 5px}
+            .veh.kind-regional,.veh.kind-express{min-width:39px;height:33px}
+            .veh-symbol{font-size:13px;min-height:15px}
+            .kind-s .veh-symbol,.kind-u .veh-symbol{font-size:16px}
+            .kind-bus .veh-symbol{font-size:8px;min-height:10px}
+            .kind-tram .veh-symbol{font-size:7px;min-height:10px}
+            .veh-line{font-size:9px;line-height:10px;max-width:38px}
+            .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px;line-height:11px;max-width:40px}''',
+          'mobile markers')
+
+          rep('''    <button class="map-style-option" type="button" data-map-style="minimal" role="menuitem"><span class="map-style-icon">🌑</span><span><span class="map-style-name">Minimal</span><span class="map-style-sub">Dunkel ohne Beschriftungen</span></span></button>
+          ''', '', 'remove minimal')
+          rep('''    <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>''',
+          '''    <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>
+              <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>''',
+          'add satellite button')
+
+          rep('tram:{name:"Tram",kind:"tram",c:"#f6c900",fg:"#111111",icon:"▥"},\n  bus:{name:"Bus",kind:"bus",c:"#f6c900",fg:"#111111",icon:"▰"},',
+              'tram:{name:"Tram",kind:"tram",c:"#f6c900",fg:"#111111",icon:"TRAM"},\n  bus:{name:"Bus",kind:"bus",c:"#f6c900",fg:"#111111",icon:"BUS"},',
+              'mode labels')
+
+          rep('''const MAP_STYLES={
+            dark:{name:"Dark",url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            minimal:{name:"Minimal",url:"https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            standard:{name:"Standard",url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
+            light:{name:"Hell",url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            voyager:{name:"Voyager",url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}}
+          };''',
+          '''const MAP_STYLES={
+            dark:{name:"Dark",bright:false,url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            standard:{name:"Standard",bright:true,url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
+            light:{name:"Hell",bright:true,url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            voyager:{name:"Voyager",bright:true,url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+            satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"}}
+          };''',
+          'map styles')
+
+          rep('''  baseLayer=next;
+            currentMapStyle=key;
+          
+            document.querySelectorAll''',
+          '''  baseLayer=next;
+            currentMapStyle=key;
+            document.body.classList.toggle("map-bright",Boolean(style.bright));
+            document.body.classList.toggle("map-satellite",key==="satellite");
+          
+            document.querySelectorAll''',
+          'map brightness classes')
+
+          rep('''      <span class="legend-sign kind-${m.kind}" style="--lc:${m.c};--lf:${m.fg}">${m.kind==="bus"?"🚌":m.kind==="tram"?"🚋":m.icon}</span>''',
+              '''      <span class="legend-sign kind-${m.kind}" style="--lc:${m.c};--lf:${m.fg}">${m.icon}</span>''',
+              'legend icon text')
+
+          rep('''      radius:3.2,
+                stroke:false,
+                fillColor:modes[d.mode].c,
+                fillOpacity:.88,''',
+          '''      radius:3.6,
+                stroke:true,
+                color:"#ffffff",
+                weight:1.4,
+                opacity:1,
+                fillColor:modes[d.mode].c,
+                fillOpacity:.95,''',
+          'dot styling')
+
+          p.write_text(s, encoding='utf-8')
+
+          for f in [
+              'public/__test_connector_file_path.txt',
+              'public/__placeholder-do-not-use.txt',
+              '.github/workflows/apply-map-visual-patch.yml',
+          ]:
+              try:
+                  os.remove(f)
+              except FileNotFoundError:
+                  pass
+          PY
+
+          git config user.name "ChatGPT Map Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Improve satellite view and vehicle markers"
+          git push
