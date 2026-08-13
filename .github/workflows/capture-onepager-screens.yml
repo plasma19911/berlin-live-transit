@@ -1,0 +1,88 @@
+name: Capture onepager screenshots
+
+on:
+  push:
+    paths:
+      - '.github/workflows/capture-onepager-screens.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare browser automation
+        shell: bash
+        run: |
+          set -e
+          mkdir -p /tmp/capture /tmp/onepager-screens
+          cd /tmp/capture
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.55.0 --silent
+
+      - name: Capture real public app screenshots
+        shell: bash
+        run: |
+          set -e
+          cd /tmp/capture
+          cat > capture.js <<'JS'
+          const { chromium } = require('playwright-core');
+          const fs = require('fs');
+
+          async function waitLive(page) {
+            await page.goto('https://berlin-live-transit.pages.dev/', {
+              waitUntil: 'domcontentloaded', timeout: 60000
+            });
+            await page.waitForFunction(() => document.querySelector('#st')?.textContent.trim() === 'LIVE', null, {timeout: 60000});
+            await page.waitForFunction(() => {
+              const raw=(document.querySelector('#total')?.textContent||'0').replace(/[^0-9]/g,'');
+              return Number(raw) > 0;
+            }, null, {timeout: 60000});
+            await page.waitForTimeout(1800);
+          }
+
+          async function planNeutralRoute(page) {
+            await page.locator('#q').fill('Alexanderplatz → Hauptbahnhof');
+            await page.locator('#search').click();
+            await page.waitForFunction(() => document.querySelector('#detailBody')?.textContent.includes('Beste Strecke'), null, {timeout: 60000});
+            await page.waitForTimeout(2200);
+          }
+
+          (async () => {
+            fs.mkdirSync('/tmp/onepager-screens', {recursive:true});
+            const browser = await chromium.launch({
+              executablePath:'/usr/bin/google-chrome',
+              headless:true,
+              args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']
+            });
+
+            const desktop = await browser.newPage({viewport:{width:1440,height:900}});
+            await waitLive(desktop);
+            console.log('desktop total:', await desktop.locator('#total').textContent());
+            await desktop.screenshot({path:'/tmp/onepager-screens/desktop-live.png', fullPage:false});
+            await planNeutralRoute(desktop);
+            console.log('desktop route:', await desktop.locator('#detailTitle').textContent());
+            await desktop.screenshot({path:'/tmp/onepager-screens/desktop-route.png', fullPage:false});
+
+            const mobile = await browser.newPage({viewport:{width:390,height:844}, isMobile:true, hasTouch:true});
+            await waitLive(mobile);
+            console.log('mobile total:', await mobile.locator('#total').textContent());
+            await mobile.screenshot({path:'/tmp/onepager-screens/mobile-live.png', fullPage:false});
+            await planNeutralRoute(mobile);
+            console.log('mobile route:', await mobile.locator('#detailTitle').textContent());
+            await mobile.screenshot({path:'/tmp/onepager-screens/mobile-route.png', fullPage:false});
+
+            await browser.close();
+          })().catch(err => { console.error(err); process.exit(1); });
+          JS
+          node capture.js
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: onepager-screens
+          path: /tmp/onepager-screens/*.png
+          if-no-files-found: error
+          retention-days: 1
