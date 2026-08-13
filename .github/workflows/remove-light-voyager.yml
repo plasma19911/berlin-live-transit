@@ -1,0 +1,49 @@
+name: Remove light and voyager map styles
+
+on:
+  push:
+    paths:
+      - '.github/workflows/remove-light-voyager.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove map styles
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          menu_light = '    <button class="map-style-option" type="button" data-map-style="light" role="menuitem"><span class="map-style-icon">☀️</span><span><span class="map-style-name">Hell</span><span class="map-style-sub">Helle, klare Darstellung</span></span></button>\n'
+          menu_voyager = '    <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>\n'
+          style_light = '  light:{name:"Hell",bright:true,url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},\n'
+          style_voyager = '  voyager:{name:"Voyager",bright:true,url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},\n'
+
+          for label, snippet in [
+              ('menu light', menu_light),
+              ('menu voyager', menu_voyager),
+              ('style light', style_light),
+              ('style voyager', style_voyager),
+          ]:
+              if s.count(snippet) != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {s.count(snippet)}')
+              s = s.replace(snippet, '', 1)
+
+          p.write_text(s, encoding='utf-8')
+          Path('.github/workflows/remove-light-voyager.yml').unlink(missing_ok=True)
+          PY
+
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Remove light and voyager map views"
+          git push
