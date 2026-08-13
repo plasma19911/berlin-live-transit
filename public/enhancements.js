@@ -594,44 +594,10 @@
     }
   }
 
-  function switchToSatellite() {
-    const map = window.__berlinLiveMap;
-    if (!map) return;
-    const layer = L.tileLayer("https://wi.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 19,
-      attribution: "Sources: Esri, Maxar, Earthstar Geographics, GIS User Community"
-    });
-    layer.addTo(map);
-    document.body.classList.remove("map-light");
-    document.querySelectorAll("[data-map-style]").forEach(b => b.classList.toggle("active", b.dataset.mapStyle === "satellite"));
-    const toggle = $("mapStyleToggle"), menu = $("mapStyleMenu");
-    if (toggle) { toggle.title = "Kartenansicht: Satellit"; toggle.classList.remove("active"); toggle.setAttribute("aria-expanded", "false"); }
-    menu?.classList.remove("show");
-    try { localStorage.setItem("berlin-live-transit-map-style", "satellite"); } catch (_) {}
-  }
-
+  // Map styles are owned exclusively by public/index.html.
+  // Keeping a second satellite handler here caused competing tile layers.
   function setupMapStyles() {
-    const menu = $("mapStyleMenu");
-    if (!menu) return;
-    menu.querySelector('[data-map-style="minimal"]')?.remove();
-    if (!menu.querySelector('[data-map-style="satellite"]')) {
-      const list = menu.querySelector(".map-style-list") || menu;
-      const button = document.createElement("button");
-      button.className = "map-style-option";
-      button.type = "button";
-      button.dataset.mapStyle = "satellite";
-      button.setAttribute("role", "menuitem");
-      button.innerHTML = '<span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span>';
-      list.appendChild(button);
-    }
-    menu.addEventListener("click", e => {
-      const button = e.target.closest('[data-map-style="satellite"]');
-      if (!button) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      switchToSatellite();
-    }, true);
-    try { if (localStorage.getItem("berlin-live-transit-map-style") === "satellite") switchToSatellite(); } catch (_) {}
+    return;
   }
 
   function setupTransportPanel() {
