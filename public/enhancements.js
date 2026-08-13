@@ -218,9 +218,9 @@
     const panel = $("detailPanel"), title = $("detailTitle"), sub = $("detailSub"), body = $("detailBody");
     panel?.classList.add("show");
     document.body.classList.add("detail-open");
-    if (title) title.textContent = "🧭 Beste Verbindung";
+    if (title) title.textContent = "🧭 Verbindungen · nächste 60 Min";
     if (sub) sub.textContent = `${from} → ${to}`;
-    if (body) body.innerHTML = '<div class="detail-loading">Adresse und beste Verbindung werden gesucht …</div>';
+    if (body) body.innerHTML = '<div class="detail-loading">Adresse und Verbindungen der nächsten 60 Minuten werden gesucht …</div>';
 
     try {
       const response = await fetch(`/api/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
@@ -236,12 +236,58 @@
       const journey = data?.journey;
       const legs = Array.isArray(journey?.legs) ? journey.legs : [];
       if (!legs.length) throw new Error("Keine Verbindung gefunden.");
+      const hourJourneys = Array.isArray(data?.journeysWithinHour) && data.journeysWithinHour.length
+        ? data.journeysWithinHour
+        : [journey];
 
       setRouteFocus(true);
       ensurePlannerPanes(map);
       const bounds = L.latLngBounds([]), layers = [];
       const transitLegs = legs.filter(l => l?.line && !l?.walking);
       const relevantVehicleLegs=[];
+      const relevantVehicleKeys=new Set();
+
+      const registerRelevantLeg=(leg,coordsHint=null)=>{
+        if(!leg?.line||leg?.walking)return;
+        let coords=Array.isArray(coordsHint)&&coordsHint.length>=2?coordsHint:flattenPolyline(leg?.polyline);
+        if(coords.length<2){
+          const a=legPoint(leg?.origin),b=legPoint(leg?.destination);
+          if(a&&b)coords=[a,b];
+        }
+        if(coords.length<2)return;
+        const product=legProduct(leg);
+        const lats=coords.map(p=>Number(p[0])).filter(Number.isFinite);
+        const lons=coords.map(p=>Number(p[1])).filter(Number.isFinite);
+        const first=coords[0],last=coords[coords.length-1];
+        const toRad=x=>Number(x)*Math.PI/180;
+        const toDeg=x=>Number(x)*180/Math.PI;
+        const y=Math.sin(toRad(last[1]-first[1]))*Math.cos(toRad(last[0]));
+        const x=Math.cos(toRad(first[0]))*Math.sin(toRad(last[0]))-Math.sin(toRad(first[0]))*Math.cos(toRad(last[0]))*Math.cos(toRad(last[1]-first[1]));
+        const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
+        const boarding=legPoint(leg?.origin);
+        const tripId=String(leg?.tripId||leg?.trip?.id||"");
+        const line=String(leg?.line?.name||leg?.line?.id||"");
+        const lineId=String(leg?.line?.id||"");
+        const departure=String(leg?.departure||leg?.plannedDeparture||"");
+        const boardName=String(leg?.origin?.name||leg?.origin?.address||"");
+        const key=tripId||[product,line,lineId,departure,boardName].join("|");
+        if(relevantVehicleKeys.has(key))return;
+        relevantVehicleKeys.add(key);
+        const padLat=.018,padLon=.030;
+        relevantVehicleLegs.push({
+          line,lineId,mode:product,
+          direction:String(leg?.direction||leg?.destination?.name||""),
+          tripId,departure,boardName,
+          boardLat:boarding?Number(boarding[0]):null,
+          boardLon:boarding?Number(boarding[1]):null,
+          bearing:Number.isFinite(legBearing)?legBearing:null,
+          minLat:lats.length?Math.min(...lats)-padLat:null,
+          maxLat:lats.length?Math.max(...lats)+padLat:null,
+          minLon:lons.length?Math.min(...lons)-padLon:null,
+          maxLon:lons.length?Math.max(...lons)+padLon:null
+        });
+      };
+
       for (const leg of legs) {
         let coords = flattenPolyline(leg?.polyline);
         if (coords.length < 2) {
@@ -251,39 +297,19 @@
         if (coords.length < 2) continue;
         coords.forEach(p => bounds.extend(p));
         const product = legProduct(leg), walking = product === "walking";
-        if(!walking&&leg?.line){
-          const lats=coords.map(p=>Number(p[0])).filter(Number.isFinite);
-          const lons=coords.map(p=>Number(p[1])).filter(Number.isFinite);
-          const padLat=.018;
-          const padLon=.030;
-          const first=coords[0], last=coords[coords.length-1];
-          const toRad=x=>Number(x)*Math.PI/180;
-          const toDeg=x=>Number(x)*180/Math.PI;
-          const y=Math.sin(toRad(last[1]-first[1]))*Math.cos(toRad(last[0]));
-          const x=Math.cos(toRad(first[0]))*Math.sin(toRad(last[0]))-Math.sin(toRad(first[0]))*Math.cos(toRad(last[0]))*Math.cos(toRad(last[1]-first[1]));
-          const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
-          const boarding=legPoint(leg?.origin);
-          relevantVehicleLegs.push({
-            line:String(leg?.line?.name||leg?.line?.id||""),
-            lineId:String(leg?.line?.id||""),
-            mode:product,
-            direction:String(leg?.direction||leg?.destination?.name||""),
-            tripId:String(leg?.tripId||leg?.trip?.id||""),
-            departure:String(leg?.departure||leg?.plannedDeparture||""),
-            boardName:String(leg?.origin?.name||leg?.origin?.address||""),
-            boardLat:boarding?Number(boarding[0]):null,
-            boardLon:boarding?Number(boarding[1]):null,
-            bearing:Number.isFinite(legBearing)?legBearing:null,
-            minLat:lats.length?Math.min(...lats)-padLat:null,
-            maxLat:lats.length?Math.max(...lats)+padLat:null,
-            minLon:lons.length?Math.min(...lons)-padLon:null,
-            maxLon:lons.length?Math.max(...lons)+padLon:null
-          });
-        }
+        if(!walking&&leg?.line)registerRelevantLeg(leg,coords);
         const color = walking ? "#e7eef7" : (modeInfo[product]?.c || "#4da8ff");
         const halo = L.polyline(coords, { pane: "plannerRouteHaloPane", color: "#071019", weight: walking ? 7 : 10, opacity: .84, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
         const line = L.polyline(coords, { pane: "plannerRoutePane", color, weight: walking ? 3 : 6, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
         layers.push(halo, line);
+      }
+
+      // Alle ÖPNV-Teilstrecken aller Verbindungen sammeln, deren Start in den nächsten 60 Minuten liegt.
+      // So können gleichzeitig der kommende Zubringer, spätere Umstiegsbahnen und weitere nutzbare Abfahrten live sichtbar sein.
+      for(const option of hourJourneys){
+        for(const optionLeg of (Array.isArray(option?.legs)?option.legs:[])){
+          registerRelevantLeg(optionLeg);
+        }
       }
 
       const start = legPoint(data?.from) || legPoint(legs[0]?.origin);
@@ -295,6 +321,8 @@
       window.__berlinPlannedVehicleFilter={
         active:true,
         legs:relevantVehicleLegs,
+        journeyCount:hourJourneys.length,
+        windowMinutes:Number(data?.routeWindowMinutes)||60,
         fitVehiclesOnce:true,
         routeBounds:bounds.isValid()?{south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()}:null
       };
@@ -313,7 +341,7 @@
         const product = legProduct(leg), info = modeInfo[product] || modeInfo.regional;
         return `<div class="route-leg"><span class="route-leg-badge" style="--leg-color:${info.c};--leg-fg:${info.fg}">${esc(leg?.line?.name || info.label)}</span><div><b>${esc(leg?.origin?.name || "")}</b> → ${esc(leg?.destination?.name || leg?.direction || "")}<div class="stop-meta">${fmtTime(leg?.departure || leg?.plannedDeparture)} – ${fmtTime(leg?.arrival || leg?.plannedArrival)}</div></div></div>`;
       }).join("");
-      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Route + Live-Fahrzeuge, die deinen Einstieg noch erreichen</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
+      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Beste Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div><div class="detail-key">Verbindungen +60 Min</div><div><b>${hourJourneys.length}</b></div></div><div class="route-chip"><span class="route-line-sample"></span><span>Alle passenden Live-Fahrzeuge bis zum Ziel · Start innerhalb der nächsten 60 Min</span></div><div class="detail-section"><h3>Beste Strecke</h3>${legRows}</div>`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       clearPlannedRoute();
