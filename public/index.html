@@ -15,6 +15,7 @@
 .brand{pointer-events:auto;border-radius:16px;padding:10px 13px;display:flex;align-items:center;gap:10px}.logo{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#1681ff,#24d2ff);font-weight:900}.title{font-weight:850;font-size:14px}.sub{font-size:10px;color:var(--muted);margin-top:2px}
 .status{margin-left:auto;pointer-events:auto;border-radius:16px;padding:9px 12px;display:flex;align-items:center;gap:10px;min-height:57px}.dot{width:9px;height:9px;border-radius:50%;background:var(--warn)}.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.status strong{font-size:12px}.status small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.total{font-size:20px;font-weight:900;margin-left:3px}
 .side{position:absolute;z-index:999;left:14px;top:86px;width:300px;display:flex;flex-direction:column;gap:9px;pointer-events:none}.panel{pointer-events:auto;border-radius:17px;padding:13px}.panel h2{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#dce7f5}
+.transport-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.transport-head h2{margin:0 0 10px}.filter-toggle{display:none;width:32px;height:28px;padding:0;border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:9px;font-size:18px;line-height:1;cursor:pointer}.filter-toggle:hover{background:rgba(255,255,255,.1)}
 .filters{display:grid;grid-template-columns:1fr 1fr;gap:7px}.filter{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:8px;font-size:11px;cursor:pointer}.filter input{accent-color:#45a8ff}.swatch{display:none}.cnt{margin-left:auto;color:var(--muted);font-size:10px}
 .legend-sign{width:23px;height:23px;display:grid;place-items:center;background:var(--lc);color:var(--lf);font-size:10px;font-weight:1000;border-radius:6px;flex:0 0 auto}
 .legend-sign{border:2px solid #fff;box-shadow:0 0 0 1px rgba(3,10,18,.72),0 2px 5px rgba(0,0,0,.28)}
@@ -104,7 +105,7 @@ body.map-bright .veh-arrow{
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
 .warn{position:absolute;z-index:1001;left:50%;bottom:26px;transform:translateX(-50%);max-width:min(650px,calc(100% - 30px));padding:10px 13px;border-radius:12px;background:rgba(54,34,10,.94);border:1px solid rgba(255,209,102,.3);color:#ffe4a1;font-size:11px;display:none}.warn.show{display:block}
 .gps-marker{background:transparent!important;border:0!important}.gps-dot{width:18px;height:18px;border-radius:50%;background:#55aaff;border:3px solid #fff;box-shadow:0 0 0 8px rgba(85,170,255,.18),0 4px 16px rgba(0,0,0,.45)}
-@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.filters{grid-template-columns:repeat(3,1fr)}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:190px}.map-style-menu{right:60px;bottom:190px;width:190px}.warn{bottom:190px}}
+@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.transport-panel{padding:9px 10px}.transport-head h2{margin:0}.filter-toggle{display:grid;place-items:center}.transport-panel.mobile-collapsed .filters{display:none}.transport-panel.mobile-collapsed{padding:7px 9px}.filters{grid-template-columns:repeat(3,1fr);margin-top:8px}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:126px}.map-style-menu{right:60px;bottom:126px;width:190px}.warn{bottom:126px}body:not(.filters-collapsed) .controls{bottom:190px}body:not(.filters-collapsed) .map-style-menu{bottom:190px}body:not(.filters-collapsed) .warn{bottom:190px}}
 
 .detail-panel{
   position:absolute;z-index:1003;right:14px;top:86px;width:320px;
@@ -195,7 +196,7 @@ body.map-bright .veh-arrow{
 
 <div class="side">
   <div class="panel glass"><div class="search"><input id="q" placeholder="Linie suchen, z. B. U8, M41, S7"><button id="search" class="btn">⌕</button></div></div>
-  <div class="panel glass"><h2>Verkehrsmittel</h2><div id="filters" class="filters"></div></div>
+  <div id="transportPanel" class="panel glass transport-panel"><div class="transport-head"><h2>Verkehrsmittel</h2><button id="filterToggle" class="filter-toggle" type="button" aria-expanded="true" title="Verkehrsmittel ein-/ausklappen">⌄</button></div><div id="filters" class="filters"></div></div>
   <div class="panel glass secondary"><h2>Status</h2><div class="stats"><div class="stat"><b id="visible">0</b><span>sichtbar</span></div><div class="stat"><b id="requests">0/4</b><span>Berlin-Kacheln</span></div></div></div>
   <div class="panel glass secondary"><div class="note"><b>Optimiert:</b> Alle Berlin-Fahrzeuge werden geladen; auf dem Handy werden nur Fahrzeuge im sichtbaren Ausschnitt gerendert. Beim Herauszoomen erscheinen leichte Punkte statt hunderter HTML-Icons.</div></div>
 </div>
@@ -215,11 +216,11 @@ body.map-bright .veh-arrow{
 <div id="mapStyleMenu" class="map-style-menu glass" role="menu" aria-label="Kartenstil">
   <div class="map-style-title">Kartenansicht</div>
   <div class="map-style-list">
+    <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>
     <button class="map-style-option" type="button" data-map-style="dark" role="menuitem"><span class="map-style-icon">🌙</span><span><span class="map-style-name">Dark</span><span class="map-style-sub">Dunkel mit Beschriftungen</span></span></button>
     <button class="map-style-option" type="button" data-map-style="standard" role="menuitem"><span class="map-style-icon">🗺️</span><span><span class="map-style-name">Standard</span><span class="map-style-sub">Klassische Straßenkarte</span></span></button>
     <button class="map-style-option" type="button" data-map-style="light" role="menuitem"><span class="map-style-icon">☀️</span><span><span class="map-style-name">Hell</span><span class="map-style-sub">Helle, klare Darstellung</span></span></button>
     <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>
-    <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>
   </div>
 </div>
 <div class="controls"><button id="mapStyleToggle" class="btn" type="button" title="Kartenansicht ändern" aria-expanded="false">🗺️</button><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
@@ -285,10 +286,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 
 function savedMapStyle(){
-  try{
-    const key=localStorage.getItem("berlin-live-transit-map-style");
-    return MAP_STYLES[key]?key:"dark";
-  }catch{return "dark"}
+  return "satellite";
 }
 
 function setMapStyle(key,{save=true,closeMenu=true}={}){
@@ -1033,6 +1031,27 @@ function locateMe(){
 
 buildFilters();
 updateFocusButton();
+
+function setFiltersCollapsed(collapsed){
+  const panel=$("transportPanel");
+  const btn=$("filterToggle");
+  if(!panel||!btn)return;
+  const on=Boolean(collapsed)&&window.innerWidth<=700;
+  panel.classList.toggle("mobile-collapsed",on);
+  document.body.classList.toggle("filters-collapsed",on);
+  btn.setAttribute("aria-expanded",String(!on));
+  btn.textContent=on?"›":"⌄";
+  btn.title=on?"Verkehrsmittel anzeigen":"Verkehrsmittel minimieren";
+  setTimeout(()=>map.invalidateSize(false),50);
+}
+
+$("filterToggle").addEventListener("click",()=>{
+  setFiltersCollapsed(!$("transportPanel").classList.contains("mobile-collapsed"));
+});
+if(window.innerWidth<=700)setFiltersCollapsed(true);
+window.addEventListener("resize",()=>{
+  if(window.innerWidth>700)setFiltersCollapsed(false);
+});
 $("detailClose").addEventListener("click",closeTripDetails);
 $("mapStyleToggle").addEventListener("click",e=>{e.stopPropagation();toggleMapStyleMenu()});
 $("mapStyleMenu").addEventListener("click",e=>{
