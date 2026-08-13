@@ -81,6 +81,47 @@
   document.head.appendChild(style);
 
   const routeState = { layers: [], controller: null };
+  const routeFocusState = { active: false, paneDisplays: new Map() };
+
+  function ensurePlannerPanes(map) {
+    const panes = [
+      ["plannerRouteHaloPane", "760"],
+      ["plannerRoutePane", "770"],
+      ["plannerStopPane", "780"]
+    ];
+    for (const [name, z] of panes) {
+      if (!map.getPane(name)) map.createPane(name);
+      const pane = map.getPane(name);
+      pane.style.zIndex = z;
+      pane.style.pointerEvents = "none";
+    }
+  }
+
+  function setRouteFocus(active) {
+    const map = window.__berlinLiveMap;
+    if (!map) return;
+    ensurePlannerPanes(map);
+    const names = ["vehiclePane", "routeHaloPane", "routePane", "tripStopPane"];
+    if (active && !routeFocusState.active) {
+      routeFocusState.paneDisplays.clear();
+      for (const name of names) {
+        const pane = map.getPane(name);
+        if (!pane) continue;
+        routeFocusState.paneDisplays.set(name, pane.style.display || "");
+        pane.style.display = "none";
+      }
+      routeFocusState.active = true;
+      document.body.classList.add("planned-route-focus");
+    } else if (!active && routeFocusState.active) {
+      for (const name of names) {
+        const pane = map.getPane(name);
+        if (pane) pane.style.display = routeFocusState.paneDisplays.get(name) || "";
+      }
+      routeFocusState.paneDisplays.clear();
+      routeFocusState.active = false;
+      document.body.classList.remove("planned-route-focus");
+    }
+  }
   const modeInfo = {
     suburban: { c: "#008d4c", fg: "#fff", label: "S" },
     subway: { c: "#0067b1", fg: "#fff", label: "U" },
@@ -151,6 +192,7 @@
     const map = window.__berlinLiveMap;
     if (map) for (const layer of routeState.layers) if (layer && map.hasLayer(layer)) map.removeLayer(layer);
     routeState.layers = [];
+    setRouteFocus(false);
   }
 
   function durationText(journey) {
@@ -192,6 +234,8 @@
       const legs = Array.isArray(journey?.legs) ? journey.legs : [];
       if (!legs.length) throw new Error("Keine Verbindung gefunden.");
 
+      setRouteFocus(true);
+      ensurePlannerPanes(map);
       const bounds = L.latLngBounds([]), layers = [];
       const transitLegs = legs.filter(l => l?.line && !l?.walking);
       for (const leg of legs) {
@@ -204,16 +248,16 @@
         coords.forEach(p => bounds.extend(p));
         const product = legProduct(leg), walking = product === "walking";
         const color = walking ? "#e7eef7" : (modeInfo[product]?.c || "#4da8ff");
-        const halo = L.polyline(coords, { pane: "routeHaloPane", color: "#071019", weight: walking ? 7 : 10, opacity: .84, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
-        const line = L.polyline(coords, { pane: "routePane", color, weight: walking ? 3 : 6, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
+        const halo = L.polyline(coords, { pane: "plannerRouteHaloPane", color: "#071019", weight: walking ? 7 : 10, opacity: .84, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
+        const line = L.polyline(coords, { pane: "plannerRoutePane", color, weight: walking ? 3 : 6, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
         layers.push(halo, line);
       }
 
       const start = legPoint(data?.from) || legPoint(legs[0]?.origin);
       const end = legPoint(data?.to) || legPoint(legs.at(-1)?.destination);
       const endpoint = letter => L.divIcon({ className: "route-endpoint", html: `<div class="route-pin">${letter}</div>`, iconSize: [30,30], iconAnchor: [15,15] });
-      if (start) { bounds.extend(start); layers.push(L.marker(start, { pane: "vehiclePane", icon: endpoint("A") }).addTo(map)); }
-      if (end) { bounds.extend(end); layers.push(L.marker(end, { pane: "vehiclePane", icon: endpoint("B") }).addTo(map)); }
+      if (start) { bounds.extend(start); layers.push(L.marker(start, { pane: "plannerStopPane", icon: endpoint("A") }).addTo(map)); }
+      if (end) { bounds.extend(end); layers.push(L.marker(end, { pane: "plannerStopPane", icon: endpoint("B") }).addTo(map)); }
       routeState.layers = layers;
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
 
@@ -232,6 +276,7 @@
       if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Beste gefundene ÖPNV-Verbindung markiert</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
     } catch (error) {
       if (error?.name === "AbortError") return;
+      clearPlannedRoute();
       console.error("Adress-Routing:", error);
       if (body) body.innerHTML = `<div class="note">Route konnte nicht berechnet werden: ${esc(error?.message || error)}</div>`;
     } finally {

@@ -1,0 +1,37 @@
+{
+  "id": "/",
+  "name": "Berlin Live Transit",
+  "short_name": "Berlin Transit",
+  "description": "Live-Karte für Bus, Tram, U-Bahn, S-Bahn und weitere Verkehrsmittel in Berlin.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d14",
+  "theme_color": "#090d14",
+  "orientation": "any",
+  "categories": [
+    "travel",
+    "navigation",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
