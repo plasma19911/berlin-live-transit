@@ -861,6 +861,40 @@ function buildFilters(){
   });
 }
 
+function routeFilterText(value){
+  return String(value||"")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g,"")
+    .trim();
+}
+
+function plannedRouteVehicleMatch(d){
+  const filter=window.__berlinPlannedVehicleFilter;
+  if(!filter||!filter.active||!Array.isArray(filter.legs)||!filter.legs.length)return true;
+
+  const vehicleLine=routeFilterText(d.line);
+  const vehicleDirection=routeFilterText(d.raw?.direction||d.raw?.destination?.name||d.raw?.destination||"");
+  const vehicleTrip=String(d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id||"");
+
+  return filter.legs.some(leg=>{
+    const legTrip=String(leg.tripId||"");
+    if(legTrip&&vehicleTrip&&legTrip===vehicleTrip)return true;
+
+    if(!vehicleLine||vehicleLine!==routeFilterText(leg.line))return false;
+
+    const legDirection=routeFilterText(leg.direction);
+    if(!legDirection||!vehicleDirection)return false;
+    const sameDirection=vehicleDirection.includes(legDirection)||legDirection.includes(vehicleDirection);
+    if(!sameDirection)return false;
+
+    if([leg.minLat,leg.maxLat,leg.minLon,leg.maxLon].every(Number.isFinite)){
+      return d.lat>=leg.minLat&&d.lat<=leg.maxLat&&d.lon>=leg.minLon&&d.lon<=leg.maxLon;
+    }
+    return true;
+  });
+}
+
 function vehicleVisibleInView(d,bounds){
   return bounds.contains([d.lat,d.lon]);
 }
@@ -909,6 +943,7 @@ function renderVehicles(){
 
   for(const [id,d] of state.vehicles){
     if(!state.enabled.has(d.mode))continue;
+    if(!plannedRouteVehicleMatch(d))continue;
     if(state.query&&!d.search.includes(state.query))continue;
     if(state.focusSelected&&!isSelectedVehicle(d))continue;
     if(!vehicleVisibleInView(d,bounds))continue;

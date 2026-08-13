@@ -101,7 +101,7 @@
     const map = window.__berlinLiveMap;
     if (!map) return;
     ensurePlannerPanes(map);
-    const names = ["vehiclePane", "routeHaloPane", "routePane", "tripStopPane"];
+    const names = ["routeHaloPane", "routePane", "tripStopPane"];
     if (active && !routeFocusState.active) {
       routeFocusState.paneDisplays.clear();
       for (const name of names) {
@@ -192,7 +192,9 @@
     const map = window.__berlinLiveMap;
     if (map) for (const layer of routeState.layers) if (layer && map.hasLayer(layer)) map.removeLayer(layer);
     routeState.layers = [];
+    window.__berlinPlannedVehicleFilter={active:false,legs:[]};
     setRouteFocus(false);
+    if(map)map.fire("moveend");
   }
 
   function durationText(journey) {
@@ -238,6 +240,7 @@
       ensurePlannerPanes(map);
       const bounds = L.latLngBounds([]), layers = [];
       const transitLegs = legs.filter(l => l?.line && !l?.walking);
+      const relevantVehicleLegs=[];
       for (const leg of legs) {
         let coords = flattenPolyline(leg?.polyline);
         if (coords.length < 2) {
@@ -247,6 +250,21 @@
         if (coords.length < 2) continue;
         coords.forEach(p => bounds.extend(p));
         const product = legProduct(leg), walking = product === "walking";
+        if(!walking&&leg?.line){
+          const lats=coords.map(p=>Number(p[0])).filter(Number.isFinite);
+          const lons=coords.map(p=>Number(p[1])).filter(Number.isFinite);
+          const padLat=.018;
+          const padLon=.030;
+          relevantVehicleLegs.push({
+            line:String(leg?.line?.name||leg?.line?.id||""),
+            direction:String(leg?.direction||leg?.destination?.name||""),
+            tripId:String(leg?.tripId||leg?.trip?.id||""),
+            minLat:lats.length?Math.min(...lats)-padLat:null,
+            maxLat:lats.length?Math.max(...lats)+padLat:null,
+            minLon:lons.length?Math.min(...lons)-padLon:null,
+            maxLon:lons.length?Math.max(...lons)+padLon:null
+          });
+        }
         const color = walking ? "#e7eef7" : (modeInfo[product]?.c || "#4da8ff");
         const halo = L.polyline(coords, { pane: "plannerRouteHaloPane", color: "#071019", weight: walking ? 7 : 10, opacity: .84, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
         const line = L.polyline(coords, { pane: "plannerRoutePane", color, weight: walking ? 3 : 6, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false, dashArray: walking ? "4 7" : null }).addTo(map);
@@ -259,6 +277,8 @@
       if (start) { bounds.extend(start); layers.push(L.marker(start, { pane: "plannerStopPane", icon: endpoint("A") }).addTo(map)); }
       if (end) { bounds.extend(end); layers.push(L.marker(end, { pane: "plannerStopPane", icon: endpoint("B") }).addTo(map)); }
       routeState.layers = layers;
+      window.__berlinPlannedVehicleFilter={active:true,legs:relevantVehicleLegs};
+      map.fire("moveend");
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
 
       const transfers = Math.max(0, transitLegs.length - 1);
@@ -273,7 +293,7 @@
         const product = legProduct(leg), info = modeInfo[product] || modeInfo.regional;
         return `<div class="route-leg"><span class="route-leg-badge" style="--leg-color:${info.c};--leg-fg:${info.fg}">${esc(leg?.line?.name || info.label)}</span><div><b>${esc(leg?.origin?.name || "")}</b> → ${esc(leg?.destination?.name || leg?.direction || "")}<div class="stop-meta">${fmtTime(leg?.departure || leg?.plannedDeparture)} – ${fmtTime(leg?.arrival || leg?.plannedArrival)}</div></div></div>`;
       }).join("");
-      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Beste gefundene ÖPNV-Verbindung markiert</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
+      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Route + passende Live-Fahrzeuge in deiner Fahrtrichtung</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       clearPlannedRoute();
