@@ -14,38 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fix vehicle arrow visibility
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('public/index.html')
-          s=p.read_text(encoding='utf-8')
-
-          s=s.replace(
-'''  transition:transform .12s ease,opacity .12s ease;\n}''',
-'''  transition:transform .12s ease,opacity .12s ease;\n  z-index:2;\n}''',1)
-
-          old='''  transform:rotate(var(--bearing,0deg));\n  transform-origin:50% 31px;\n  transition:transform .25s ease;\n  pointer-events:none;'''
-          new='''  transform:rotate(var(--bearing,0deg));\n  transform-origin:50% 50%;\n  transition:transform .25s ease;\n  pointer-events:none;\n  z-index:5;'''
-          assert old in s, 'arrow transform block not found'
-          s=s.replace(old,new,1)
-
-          old='.veh-wrap.no-bearing .veh-arrow{display:none}'
-          assert old in s, 'no-bearing hide rule not found'
-          s=s.replace(old,'.veh-wrap.no-bearing .veh-arrow{display:grid}',1)
-
-          old='''  const hasBearing=Number.isFinite(Number(bearing));\n  const b=hasBearing?Number(bearing):0;'''
-          new='''  const hasBearing=Number.isFinite(Number(bearing));\n  const b=hasBearing?Number(bearing):0;'''
-          assert old in s, 'bearing block not found'
-
-          old='''html:`<div class="veh-wrap ${hasBearing?"":"no-bearing"}" style="--c:${m.c};--fg:${m.fg}">'''
-          new='''html:`<div class="veh-wrap ${hasBearing?"":"no-bearing"}" style="--c:${m.c};--fg:${m.fg}">'''
-          assert old in s, 'icon wrapper not found'
-
-          # Keep the old triangle glyph; only guarantee it stays on top.
-          assert 'title="Fahrtrichtung">▲</span>' in s
-
-          p.write_text(s,encoding='utf-8')
-          PY
+        run: python .github/arrow_visibility_patch.py
       - name: Validate
         run: |
           python - <<'PY'
@@ -61,6 +30,7 @@ jobs:
         run: |
           git config user.name "ChatGPT UI Patch"
           git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/arrow_visibility_patch.py
           git rm -f .github/workflows/fix-arrow-visibility.yml
           git add public/index.html
           git commit -m "Keep direction arrows visible above vehicles"
