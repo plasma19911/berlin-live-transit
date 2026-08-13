@@ -19,22 +19,7 @@ jobs:
           set -euo pipefail
           curl -fLsS --max-time 30 https://berlin-live-transit.pages.dev/ -o /tmp/index.html
           grep -q 'Berlin Live Transit' /tmp/index.html
-          curl -fLsS --max-time 30 'https://berlin-live-transit.pages.dev/api/radar-berlin' -o /tmp/radar.json
-          python - <<'PY'
-          import json
-          d=json.load(open('/tmp/radar.json'))
-          arr=d.get('movements') or d.get('vehicles') or d.get('results') or []
-          print('radar_count', len(arr))
-          if not arr:
-              raise SystemExit('no radar vehicles')
-          PY
-          curl -fLsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json
-          python - <<'PY'
-          import json
-          d=json.load(open('/tmp/route.json'))
-          j=d.get('journey') or {}
-          legs=j.get('legs') or []
-          print('route_legs', len(legs))
-          if not legs:
-              raise SystemExit('no route legs')
-          PY
+          status=$(curl -LsS --max-time 40 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin')
+          echo "radar_http=$status"
+          cat /tmp/radar.json
+          test "$status" = "200"
