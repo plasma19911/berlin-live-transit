@@ -1,0 +1,24 @@
+name: Apply relevant route vehicles
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/relevant-route-vehicles.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python .github/relevant_route_vehicles_patch.py
+      - run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          rm -f .github/workflows/relevant-route-vehicles.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Show relevant live vehicles for planned route"
+          git push
