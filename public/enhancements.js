@@ -1,11 +1,12 @@
 (() => {
   "use strict";
-  const version = "20260813-live-journey-v2";
+  const version = "20260813-live-journey-v3";
   const scripts = [
     "https://cdn.jsdelivr.net/gh/plasma19911/berlin-live-transit@ccebe02118fd0901e0f1c51a13284f654b5fe2bc/public/enhancements.js",
     "/journey-upgrade-core.js",
     "/journey-upgrade-ui.js",
-    "/journey-upgrade-map.js"
+    "/journey-upgrade-map.js",
+    "/vehicle-click-nozoom.js"
   ];
   const load = src => new Promise((resolve, reject) => {
     const s = document.createElement("script");
