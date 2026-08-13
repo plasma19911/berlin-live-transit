@@ -652,7 +652,7 @@
   }
 
   function start() {
-    setupMapStyles();
+    // duplicate map-style controller disabled; main index handles all base layers
     setupTransportPanel();
     setupSearch();
   }
