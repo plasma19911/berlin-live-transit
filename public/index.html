@@ -25,6 +25,7 @@
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}.stat{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:9px}.stat b{display:block;font-size:17px}.stat span{font-size:9.5px;color:var(--muted)}
 .note{font-size:10px;color:var(--muted);line-height:1.45}.note b{color:#dce8f6}
 .controls{position:absolute;z-index:1000;right:14px;bottom:28px;display:flex;flex-direction:column;gap:8px}.controls .btn{width:43px;height:43px;font-size:17px;padding:0}.controls .btn.active{background:rgba(77,168,255,.24);border-color:rgba(77,168,255,.75);box-shadow:0 0 0 2px rgba(77,168,255,.12)}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.map-style-menu{position:absolute;z-index:1002;right:66px;bottom:28px;width:205px;padding:9px;border-radius:15px;display:none}.map-style-menu.show{display:block}.map-style-title{font-size:10px;font-weight:850;letter-spacing:.07em;text-transform:uppercase;color:#dce7f5;padding:2px 4px 8px}.map-style-list{display:grid;gap:6px}.map-style-option{width:100%;display:flex;align-items:center;gap:9px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);border-radius:11px;padding:8px 9px;cursor:pointer;text-align:left;font:inherit}.map-style-option:hover{background:rgba(255,255,255,.09)}.map-style-option.active{background:rgba(77,168,255,.18);border-color:rgba(77,168,255,.68);box-shadow:0 0 0 1px rgba(77,168,255,.1) inset}.map-style-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:rgba(255,255,255,.07);font-size:15px;flex:0 0 auto}.map-style-name{font-size:11px;font-weight:800}.map-style-sub{font-size:9px;color:var(--muted);margin-top:1px}
 .vicon{background:transparent!important;border:0!important;overflow:visible!important}
 .veh-wrap{
   --c:#49a8ff;--fg:#fff;
@@ -97,7 +98,7 @@
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
 .warn{position:absolute;z-index:1001;left:50%;bottom:26px;transform:translateX(-50%);max-width:min(650px,calc(100% - 30px));padding:10px 13px;border-radius:12px;background:rgba(54,34,10,.94);border:1px solid rgba(255,209,102,.3);color:#ffe4a1;font-size:11px;display:none}.warn.show{display:block}
 .gps-marker{background:transparent!important;border:0!important}.gps-dot{width:18px;height:18px;border-radius:50%;background:#55aaff;border:3px solid #fff;box-shadow:0 0 0 8px rgba(85,170,255,.18),0 4px 16px rgba(0,0,0,.45)}
-@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.filters{grid-template-columns:repeat(3,1fr)}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:190px}.warn{bottom:190px}}
+@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.filters{grid-template-columns:repeat(3,1fr)}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:190px}.map-style-menu{right:60px;bottom:190px;width:190px}.warn{bottom:190px}}
 
 .detail-panel{
   position:absolute;z-index:1003;right:14px;top:86px;width:320px;
@@ -129,6 +130,7 @@
 @media(max-width:700px){
   body.detail-open .side{display:none}
   body.detail-open .controls{bottom:205px}
+  body.detail-open .map-style-menu{bottom:205px}
   body.detail-open .warn{bottom:205px}
 
   .detail-panel{
@@ -204,7 +206,17 @@
   <div id="detailBody"></div>
 </aside>
 
-<div class="controls"><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
+<div id="mapStyleMenu" class="map-style-menu glass" role="menu" aria-label="Kartenstil">
+  <div class="map-style-title">Kartenansicht</div>
+  <div class="map-style-list">
+    <button class="map-style-option" type="button" data-map-style="dark" role="menuitem"><span class="map-style-icon">🌙</span><span><span class="map-style-name">Dark</span><span class="map-style-sub">Dunkel mit Beschriftungen</span></span></button>
+    <button class="map-style-option" type="button" data-map-style="minimal" role="menuitem"><span class="map-style-icon">🌑</span><span><span class="map-style-name">Minimal</span><span class="map-style-sub">Dunkel ohne Beschriftungen</span></span></button>
+    <button class="map-style-option" type="button" data-map-style="standard" role="menuitem"><span class="map-style-icon">🗺️</span><span><span class="map-style-name">Standard</span><span class="map-style-sub">Klassische Straßenkarte</span></span></button>
+    <button class="map-style-option" type="button" data-map-style="light" role="menuitem"><span class="map-style-icon">☀️</span><span><span class="map-style-name">Hell</span><span class="map-style-sub">Helle, klare Darstellung</span></span></button>
+    <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>
+  </div>
+</div>
+<div class="controls"><button id="mapStyleToggle" class="btn" type="button" title="Kartenansicht ändern" aria-expanded="false">🗺️</button><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
 <div id="warn" class="warn"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -230,8 +242,17 @@ const modes = {
   express:{name:"Fernzug",kind:"express",c:"#e2001a",fg:"#ffffff",icon:"ICE"}
 };
 
+const MAP_STYLES={
+  dark:{name:"Dark",url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  minimal:{name:"Minimal",url:"https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  standard:{name:"Standard",url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
+  light:{name:"Hell",url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
+  voyager:{name:"Voyager",url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}}
+};
+
 const map = L.map("map",{zoomControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);
+let baseLayer=null;
+let currentMapStyle="dark";
 L.control.zoom({position:"topright"}).addTo(map);
 
 // Dedicated panes keep the selected route and stops visible above dense vehicle markers.
@@ -256,6 +277,49 @@ map.getPane("vehiclePane").style.pointerEvents="auto";
 const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,tripLayers:new Map(),renderMode:null,tripController:null,selectionSeq:0,focusSelected:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+
+function savedMapStyle(){
+  try{
+    const key=localStorage.getItem("berlin-live-transit-map-style");
+    return MAP_STYLES[key]?key:"dark";
+  }catch{return "dark"}
+}
+
+function setMapStyle(key,{save=true,closeMenu=true}={}){
+  if(!MAP_STYLES[key])key="dark";
+  const style=MAP_STYLES[key];
+  const next=L.tileLayer(style.url,{...style.options,keepBuffer:3,updateWhenIdle:true});
+  next.addTo(map);
+  if(baseLayer&&map.hasLayer(baseLayer))map.removeLayer(baseLayer);
+  baseLayer=next;
+  currentMapStyle=key;
+
+  document.querySelectorAll("[data-map-style]").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.mapStyle===key);
+  });
+  const toggle=$("mapStyleToggle");
+  if(toggle)toggle.title=`Kartenansicht: ${style.name}`;
+  if(save){try{localStorage.setItem("berlin-live-transit-map-style",key)}catch{}}
+  if(closeMenu)closeMapStyleMenu();
+}
+
+function openMapStyleMenu(){
+  $("mapStyleMenu").classList.add("show");
+  $("mapStyleToggle").classList.add("active");
+  $("mapStyleToggle").setAttribute("aria-expanded","true");
+}
+
+function closeMapStyleMenu(){
+  $("mapStyleMenu").classList.remove("show");
+  $("mapStyleToggle").classList.remove("active");
+  $("mapStyleToggle").setAttribute("aria-expanded","false");
+}
+
+function toggleMapStyleMenu(){
+  $("mapStyleMenu").classList.contains("show")?closeMapStyleMenu():openMapStyleMenu();
+}
+
+setMapStyle(savedMapStyle(),{save:false,closeMenu:false});
 
 function classify(m){
   const p=(m.line&&m.line.product)||m.product||"";
@@ -959,6 +1023,15 @@ function locateMe(){
 buildFilters();
 updateFocusButton();
 $("detailClose").addEventListener("click",closeTripDetails);
+$("mapStyleToggle").addEventListener("click",e=>{e.stopPropagation();toggleMapStyleMenu()});
+$("mapStyleMenu").addEventListener("click",e=>{
+  e.stopPropagation();
+  const btn=e.target.closest("[data-map-style]");
+  if(btn)setMapStyle(btn.dataset.mapStyle);
+});
+document.addEventListener("click",e=>{
+  if($("mapStyleMenu").classList.contains("show")&&!$("mapStyleMenu").contains(e.target)&&e.target!==$("mapStyleToggle"))closeMapStyleMenu();
+});
 $("refresh").addEventListener("click",refresh);
 $("gps").addEventListener("click",locateMe);
 $("focusRoutes").addEventListener("click",()=>setSelectedFocus(!state.focusSelected));
