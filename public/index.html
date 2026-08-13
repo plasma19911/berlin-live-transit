@@ -199,7 +199,7 @@ body.map-bright .veh-arrow{
 .zoom-far .veh.kind-s,.zoom-far .veh.kind-u,.zoom-far .veh.kind-ferry{width:27px;height:27px;min-width:27px}
 .zoom-far .veh-symbol{font-size:13px;min-height:13px}
 .zoom-far .kind-s .veh-symbol,.zoom-far .kind-u .veh-symbol{font-size:15px}
-.zoom-far .veh-arrow{top:-4px;font-size:10px;width:12px;height:12px;margin-left:-6px;transform-origin:50% 21px}
+.zoom-far .veh-arrow{top:-8px;font-size:16px;width:18px;height:18px;margin-left:-9px;transform-origin:50% 50%;z-index:5}
 .zoom-mid .veh-line{font-size:7px}
 /* mobile-readability-fix */
 .controls{
@@ -857,7 +857,7 @@ async function loadTripDetails(d){
 function updateMarkerDensity(){
   const z=map.getZoom();
   const el=document.getElementById("map");
-  el.classList.toggle("zoom-far",z<=11);
+  el.classList.toggle("zoom-far",z<=9);
   el.classList.toggle("zoom-mid",z===12||z===13);
 }
 map.on("zoomend",()=>{updateMarkerDensity();renderVehicles()});
