@@ -1,0 +1,40 @@
+name: Refresh planner assets
+
+on:
+  push:
+    paths:
+      - '.github/workflows/refresh-planner-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh planner asset version
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('public/index.html')
+          s=p.read_text(encoding='utf-8')
+          s,n=re.subn(r'<script src="/enhancements\.js(?:\?v=[^"]*)?"></script>', '<script src="/enhancements.js?v=20260813-1431"></script>', s, count=1)
+          assert n==1
+          p.write_text(s,encoding='utf-8')
+          Path('public/_headers').write_text('/\n  Cache-Control: no-cache\n/enhancements.js\n  Cache-Control: no-cache, no-store, must-revalidate\n',encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          node --check public/enhancements.js
+          grep -q 'enhancements.js?v=20260813-1431' public/index.html
+          ! grep -q 'syncPlannedVehicleMarkers' public/enhancements.js
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT App Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/index.html public/_headers
+          git commit -m "Refresh route planner asset after fix"
+          git push
