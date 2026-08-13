@@ -1,0 +1,82 @@
+name: Fix zoom icon sizes
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-zoom-icon-sizes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make vehicle markers progressively smaller when zooming out
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text(encoding='utf-8')
+
+          old='''/* Compact overview at the initial Berlin zoom: keep the map readable while preserving real icons + arrows. */
+.zoom-overview .veh-wrap{
+  transform:scale(.62);
+  transform-origin:50% 50%;
+}
+@media(max-width:700px){
+  .zoom-overview .veh-wrap{transform:scale(.52)}
+}'''
+          new='''/* Progressive overview sizing: the farther out, the smaller the vehicle marker. */
+.zoom-overview-11 .veh-wrap{
+  transform:scale(.50);
+  transform-origin:50% 50%;
+}
+.zoom-overview-10 .veh-wrap{
+  transform:scale(.38);
+  transform-origin:50% 50%;
+}
+@media(max-width:700px){
+  .zoom-overview-11 .veh-wrap{transform:scale(.42)}
+  .zoom-overview-10 .veh-wrap{transform:scale(.30)}
+}'''
+          assert old in s, 'overview CSS block not found'
+          s=s.replace(old,new,1)
+
+          old='''  el.classList.toggle("zoom-far",z<=9);
+  el.classList.toggle("zoom-overview",z===10||z===11);
+  el.classList.toggle("zoom-mid",z===12||z===13);'''
+          new='''  el.classList.toggle("zoom-far",z<=9);
+  el.classList.toggle("zoom-overview-10",z===10);
+  el.classList.toggle("zoom-overview-11",z===11);
+  el.classList.toggle("zoom-mid",z===12||z===13);'''
+          assert old in s, 'marker density class block not found'
+          s=s.replace(old,new,1)
+
+          old='''  const mode=plannedFilterActive?"icons":(zoom<=9?"dots":"icons");'''
+          new='''  const mode=zoom<=9?"dots":"icons";'''
+          assert old in s, 'render mode block not found'
+          s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('public/index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/index-inline.js').write_text(max(blocks,key=len),encoding='utf-8')
+          PY
+          node --check /tmp/index-inline.js
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/fix-zoom-icon-sizes.yml
+          git add public/index.html
+          git commit -m "Scale vehicle markers down when zooming out"
+          git push
