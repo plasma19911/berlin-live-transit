@@ -20,7 +20,9 @@ const TILES = ROWS.flatMap(([north, south]) =>
   COLS.map(([west, east]) => ({ north, south, west, east }))
 );
 
-const UPSTREAM_TIMEOUT_MS = 4500;
+// transport.rest can currently need noticeably more than 4.5 s for radar calls.
+// Give each upstream enough time while still keeping the Pages Function bounded.
+const UPSTREAM_TIMEOUT_MS = 9000;
 
 function movementKey(m) {
   const p = m?.location || m?.position || {};
