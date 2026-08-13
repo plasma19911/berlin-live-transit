@@ -898,22 +898,23 @@ function plannedRouteVehicleMatch(d){
 
     const inArea=![leg.minLat,leg.maxLat,leg.minLon,leg.maxLon].every(Number.isFinite) ||
       (d.lat>=leg.minLat&&d.lat<=leg.maxLat&&d.lon>=leg.minLon&&d.lon<=leg.maxLon);
-    if(!inArea)return false;
 
     const legDirection=routeFilterText(leg.direction);
     const textDirectionOk=Boolean(legDirection&&vehicleDirection&&
       (vehicleDirection.includes(legDirection)||legDirection.includes(vehicleDirection)));
+    // Gleiche Linie + gleiche Zielrichtung: auch kurz vor dem eigentlichen Teilabschnitt anzeigen,
+    // damit man sieht, wo das Fahrzeug herankommt.
     if(textDirectionOk)return true;
 
-    // VBB radar direction labels are not always formatted like journey direction labels.
-    // In that case use the vehicle's live bearing and the planned leg bearing.
+    // VBB-Radar und Journey-API benennen Ziele teilweise unterschiedlich.
+    // Dann die echte Fahrtrichtung des Live-Fahrzeugs mit der Richtung des Reiseabschnitts vergleichen.
     if(Number.isFinite(Number(leg.bearing))&&Number.isFinite(Number(d.bearing))){
-      return angleDiff(d.bearing,leg.bearing)<=95;
+      const tolerance=inArea?120:75;
+      return angleDiff(d.bearing,leg.bearing)<=tolerance;
     }
 
-    // Last fallback: same mode + same line + inside the relevant route corridor.
-    // This is preferable to hiding every relevant vehicle when the upstream omits direction metadata.
-    return !vehicleDirection||!legDirection;
+    // Fehlen Richtungsdaten, nur Fahrzeuge im Korridor der benötigten Teilstrecke zulassen.
+    return inArea&&(!vehicleDirection||!legDirection);
   });
 }
 
@@ -958,12 +959,13 @@ function createVehicleLayer(d,mode){
 
 function renderVehicles(){
   const zoom=map.getZoom();
-  const mode=zoom<=11?"dots":"icons";
-  const bounds=map.getBounds().pad(zoom<=11?0.03:0.12);
+  const plannedFilterActive=Boolean(window.__berlinPlannedVehicleFilter?.active);
+  // Bei einer geplanten Verbindung immer große Fahrzeug-Icons zeigen.
+  // So werden die relevanten Busse/Bahnen auch bei weit herausgezoomter Route klar sichtbar.
+  const mode=plannedFilterActive?"icons":(zoom<=11?"dots":"icons");
+  const bounds=map.getBounds().pad(plannedFilterActive?0.24:(zoom<=11?0.03:0.12));
   const wanted=new Set();
   let visible=0;
-
-  const plannedFilterActive=Boolean(window.__berlinPlannedVehicleFilter?.active);
   for(const [id,d] of state.vehicles){
     if(!state.enabled.has(d.mode))continue;
     if(!plannedRouteVehicleMatch(d))continue;

@@ -59,6 +59,7 @@
     .route-leg{display:flex;gap:7px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(255,255,255,.07)}
     .route-leg:first-child{border-top:0}
     .route-leg-badge{min-width:44px;padding:3px 5px;border-radius:7px;text-align:center;font-size:9px;font-weight:1000;background:var(--leg-color,#65758a);color:var(--leg-fg,#fff);border:1px solid rgba(255,255,255,.75)}
+    body.planned-route-focus .veh{box-shadow:0 0 0 2px rgba(255,255,255,.98),0 0 0 5px rgba(5,10,16,.88),0 0 18px rgba(77,168,255,.75)!important}
     @media(max-width:700px){
       .transport-toggle{display:block}
       .side{gap:6px!important}
@@ -85,9 +86,9 @@
 
   function ensurePlannerPanes(map) {
     const panes = [
-      ["plannerRouteHaloPane", "760"],
-      ["plannerRoutePane", "770"],
-      ["plannerStopPane", "780"]
+      ["plannerRouteHaloPane", "650"],
+      ["plannerRoutePane", "660"],
+      ["plannerStopPane", "820"]
     ];
     for (const [name, z] of panes) {
       if (!map.getPane(name)) map.createPane(name);
