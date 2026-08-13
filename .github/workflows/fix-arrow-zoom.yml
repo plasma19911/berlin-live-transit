@@ -1,0 +1,37 @@
+name: Fix arrow zoom override
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/fix-arrow-zoom.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix zoom arrow override
+        run: python .github/arrow_zoom_patch.py
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('public/index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/index-inline.js').write_text(max(blocks,key=len),encoding='utf-8')
+          PY
+          node --check /tmp/index-inline.js
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/arrow_zoom_patch.py
+          git rm -f .github/workflows/fix-arrow-zoom.yml
+          git add public/index.html
+          git commit -m "Keep direction arrows visible at normal zoom"
+          git push
