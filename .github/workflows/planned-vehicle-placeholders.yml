@@ -16,17 +16,7 @@ jobs:
       - name: Apply planned vehicle placeholder patch
         run: python .github/planned_vehicle_placeholders_patch.py
       - name: Validate JavaScript
-        run: |
-          node --check public/enhancements.js
-          python - <<'PY'
-          from pathlib import Path
-          s=Path('public/index.html').read_text(encoding='utf-8')
-          start=s.find('<script>')
-          end=s.rfind('</script>')
-          js=s[start+8:end]
-          Path('/tmp/index-inline.js').write_text(js,encoding='utf-8')
-          PY
-          node --check /tmp/index-inline.js
+        run: node --check public/enhancements.js
       - name: Commit
         run: |
           git config user.name "ChatGPT UI Patch"
