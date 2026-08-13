@@ -37,11 +37,13 @@
     .veh{border:2px solid rgba(255,255,255,.98)!important;box-shadow:0 0 0 1px rgba(0,0,0,.62),0 3px 9px rgba(0,0,0,.46)!important}
     .veh.kind-s{border:2px solid rgba(255,255,255,.98)!important;box-shadow:0 0 0 1px rgba(0,0,0,.62),0 3px 9px rgba(0,0,0,.46)!important}
     body.map-light .veh{box-shadow:0 0 0 2px rgba(5,10,16,.86),0 3px 9px rgba(0,0,0,.34)!important}
-    body.map-light .veh-arrow{color:#111!important;text-shadow:0 0 2px #fff,0 0 4px #fff,0 1px 2px #fff!important;filter:none!important}
+    body.map-light .veh-arrow{color:#fff!important;background:rgba(5,10,18,.96)!important;border:2px solid #fff!important;text-shadow:none!important;filter:none!important}
     .veh.kind-bus,.veh.kind-tram{min-width:46px!important;height:40px!important;padding:2px 5px 3px!important;border-radius:9px!important}
+    .veh.kind-replacement{min-width:50px!important;height:40px!important;padding:2px 6px 3px!important;border-radius:9px!important;background:linear-gradient(135deg,#c026d3 0 72%,#7d168d 72% 100%)!important}
     .kind-bus .veh-symbol,.kind-tram .veh-symbol{font-size:0!important;min-height:10px!important;line-height:10px!important}
     .kind-bus .veh-symbol::before{content:"BUS"!important;font-size:8px!important;line-height:9px!important;font-weight:1000!important;letter-spacing:.06em!important}
     .kind-tram .veh-symbol::before{content:"TRAM"!important;font-size:8px!important;line-height:9px!important;font-weight:1000!important;letter-spacing:.04em!important}
+    .kind-replacement .veh-symbol{font-size:10px!important;line-height:10px!important;min-height:11px!important;font-weight:1000!important;letter-spacing:.08em!important}
     .kind-bus .veh-line,.kind-tram .veh-line{font-size:11px!important;line-height:12px!important;max-width:44px!important;font-weight:1000!important}
     .veh-line{font-size:10px!important;line-height:11px!important;max-width:42px!important;font-weight:1000!important}
     .kind-s .veh-line,.kind-u .veh-line{font-size:8px!important}
@@ -70,6 +72,7 @@
       body.detail-open .map-style-menu{bottom:205px!important}
       body.detail-open .warn{bottom:205px!important}
       .veh.kind-bus,.veh.kind-tram{min-width:42px!important;height:36px!important}
+      .veh.kind-replacement{min-width:46px!important;height:36px!important}
       .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px!important;line-height:11px!important}
       .kind-bus .veh-symbol::before,.kind-tram .veh-symbol::before{font-size:7px!important;line-height:8px!important}
     }
@@ -129,6 +132,7 @@
     subway: { c: "#0067b1", fg: "#fff", label: "U" },
     tram: { c: "#ff8a00", fg: "#111", label: "TRAM" },
     bus: { c: "#f6c900", fg: "#111", label: "BUS" },
+    replacement: { c: "#c026d3", fg: "#fff", label: "SEV" },
     ferry: { c: "#0077a8", fg: "#fff", label: "F" },
     regional: { c: "#e2001a", fg: "#fff", label: "RE" },
     express: { c: "#e2001a", fg: "#fff", label: "ICE" }
@@ -182,6 +186,9 @@
 
   function legProduct(leg) {
     if (leg?.walking) return "walking";
+    const remarks = Array.isArray(leg?.remarks) ? leg.remarks.map(r => r?.text || r?.summary || r?.code || "").join(" ") : "";
+    const text = [leg?.line?.name, leg?.line?.id, leg?.direction, leg?.destination?.name, remarks].filter(Boolean).join(" ").toUpperCase();
+    if (/\bSEV\b|SCHIENENERSATZVERKEHR|ERSATZVERKEHR|ERSATZBUS/.test(text)) return "replacement";
     const p = leg?.line?.product;
     return modeInfo[p] ? p : "regional";
   }
@@ -196,6 +203,7 @@
 
   function modeCompatible(a, b) {
     if (!a || !b || a === b) return true;
+    if ((a === "replacement" && b === "bus") || (a === "bus" && b === "replacement")) return true;
     const railA = a === "regional" || a === "express";
     const railB = b === "regional" || b === "express";
     return railA && railB;

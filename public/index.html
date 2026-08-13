@@ -30,6 +30,7 @@
 .legend-sign.kind-s,.legend-sign.kind-ferry{border-radius:50%}
 .legend-sign.kind-u{font-size:16px}
 .legend-sign.kind-bus,.legend-sign.kind-tram{width:30px;font-size:7px;letter-spacing:.02em}
+.legend-sign.kind-replacement{width:32px;font-size:8px;letter-spacing:.05em;border-radius:7px}
 .search{display:flex;gap:7px}.search input{flex:1;min-width:0;border:1px solid var(--border);background:rgba(255,255,255,.045);color:var(--text);border-radius:11px;padding:9px 10px;outline:none}.btn{border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:11px;padding:8px 10px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.1)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}.stat{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:9px}.stat b{display:block;font-size:17px}.stat span{font-size:9.5px;color:var(--muted)}
 .note{font-size:10px;color:var(--muted);line-height:1.45}.note b{color:#dce8f6}
@@ -58,6 +59,7 @@ body.map-bright .veh{
 .veh.kind-s{min-width:36px;width:36px;height:36px;border-radius:50%}
 .veh.kind-u{min-width:36px;width:36px;height:36px;border-radius:7px}
 .veh.kind-bus,.veh.kind-tram{min-width:48px;height:40px;border-radius:9px;padding:2px 6px 3px}
+.veh.kind-replacement{min-width:50px;height:40px;border-radius:9px;padding:2px 6px 3px;background:linear-gradient(135deg,var(--c) 0 72%,#7d168d 72% 100%)}
 .veh.kind-ferry{min-width:36px;width:36px;height:36px;border-radius:50%}
 .veh.kind-regional,.veh.kind-express{min-width:43px;height:37px;border-radius:8px}
 .veh-symbol{
@@ -69,29 +71,32 @@ body.map-bright .veh{
 .kind-express .veh-symbol{font-size:9px}
 .kind-bus .veh-symbol{font-size:9px;min-height:12px;letter-spacing:.05em}
 .kind-tram .veh-symbol{font-size:8px;min-height:12px;letter-spacing:.035em}
+.kind-replacement .veh-symbol{font-size:10px;min-height:12px;letter-spacing:.08em}
 .veh-line{
   max-width:42px;overflow:hidden;text-overflow:ellipsis;
   font-size:10px;line-height:11px;font-weight:1000;white-space:nowrap;text-align:center;
 }
 .kind-bus .veh-line,.kind-tram .veh-line{max-width:44px;font-size:11px;line-height:12px}
+.kind-replacement .veh-line{max-width:46px;font-size:10px;line-height:11px}
 .kind-s .veh-line,.kind-u .veh-line{font-size:8px}
 .veh-arrow{
-  position:absolute;left:50%;top:-8px;
-  width:16px;height:16px;margin-left:-8px;
+  position:absolute;left:50%;top:-12px;
+  width:22px;height:22px;margin-left:-11px;
   display:grid;place-items:center;
-  color:#fff;
-  font-size:14px;line-height:1;font-weight:1000;
+  color:#fff;background:rgba(5,10,18,.96);
+  border:2px solid #fff;border-radius:50%;
+  font-size:17px;line-height:18px;font-weight:1000;
   transform:rotate(var(--bearing,0deg));
-  transform-origin:50% 28px;
+  transform-origin:50% 36px;
   transition:transform .25s ease;
   pointer-events:none;
-  text-shadow:0 1px 3px rgba(0,0,0,.95);
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));
+  text-shadow:none;
+  box-shadow:0 0 0 1px rgba(0,0,0,.68),0 2px 7px rgba(0,0,0,.62);
+  filter:none;
 }
 body.map-bright .veh-arrow{
-  color:#101820;
-  text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);
-  filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));
+  color:#fff;background:rgba(5,10,18,.96);
+  border-color:#fff;text-shadow:none;filter:none;
 }
 .veh-wrap.no-bearing .veh-arrow{display:none}
 .veh-wrap:hover .veh{transform:scale(1.06)}
@@ -101,14 +106,17 @@ body.map-bright .veh-arrow{
   .veh{min-width:34px;height:32px;padding:1px 4px 2px}
   .veh.kind-s,.veh.kind-u,.veh.kind-ferry{width:32px;height:32px;min-width:32px}
   .veh.kind-bus,.veh.kind-tram{min-width:44px;height:36px;padding:2px 5px}
+  .veh.kind-replacement{min-width:46px;height:36px;padding:2px 5px}
   .veh.kind-regional,.veh.kind-express{min-width:39px;height:33px}
   .veh-symbol{font-size:13px;min-height:15px}
   .kind-s .veh-symbol,.kind-u .veh-symbol{font-size:16px}
   .kind-bus .veh-symbol{font-size:8px;min-height:10px}
   .kind-tram .veh-symbol{font-size:7px;min-height:10px}
+  .kind-replacement .veh-symbol{font-size:9px;min-height:10px}
   .veh-line{font-size:9px;line-height:10px;max-width:38px}
   .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px;line-height:11px;max-width:40px}
-  .veh-arrow{top:-6px;font-size:12px;width:14px;height:14px;margin-left:-7px;transform-origin:50% 25px}
+  .kind-replacement .veh-line{font-size:9px;line-height:10px;max-width:42px}
+  .veh-arrow{top:-11px;font-size:16px;line-height:16px;width:20px;height:20px;margin-left:-10px;transform-origin:50% 33px}
 }
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
 .warn{position:absolute;z-index:1001;left:50%;bottom:26px;transform:translateX(-50%);max-width:min(650px,calc(100% - 30px));padding:10px 13px;border-radius:12px;background:rgba(54,34,10,.94);border:1px solid rgba(255,209,102,.3);color:#ffe4a1;font-size:11px;display:none}.warn.show{display:block}
@@ -320,6 +328,7 @@ const modes = {
   subway:{name:"U-Bahn",kind:"u",c:"#0067b1",fg:"#ffffff",icon:"U"},
   tram:{name:"Tram",kind:"tram",c:"#ff8a00",fg:"#111111",icon:"TRAM"},
   bus:{name:"Bus",kind:"bus",c:"#f6c900",fg:"#111111",icon:"BUS"},
+  replacement:{name:"Ersatzverkehr",kind:"replacement",c:"#c026d3",fg:"#ffffff",icon:"SEV"},
   ferry:{name:"Fähre",kind:"ferry",c:"#0077a8",fg:"#ffffff",icon:"⚓"},
   regional:{name:"Regional",kind:"regional",c:"#e2001a",fg:"#ffffff",icon:"RE"},
   express:{name:"Fernzug",kind:"express",c:"#e2001a",fg:"#ffffff",icon:"ICE"}
@@ -404,6 +413,13 @@ function toggleMapStyleMenu(){
 setMapStyle(savedMapStyle(),{save:false,closeMenu:false});
 
 function classify(m){
+  const remarks=Array.isArray(m.remarks)
+    ? m.remarks.map(r=>r?.text||r?.summary||r?.code||"").join(" ")
+    : "";
+  const replacementText=[m.line?.name,m.line?.id,m.name,m.direction,m.destination?.name,remarks]
+    .filter(Boolean).join(" ").toUpperCase();
+  if(/\bSEV\b|SCHIENENERSATZVERKEHR|ERSATZVERKEHR|ERSATZBUS/.test(replacementText)) return "replacement";
+
   const p=(m.line&&m.line.product)||m.product||"";
   if(modes[p]) return p;
 
@@ -462,7 +478,7 @@ function icon(line,mode,bearing){
   return L.divIcon({
     className:"vicon",
     html:`<div class="veh-wrap ${hasBearing?"":"no-bearing"}" style="--c:${m.c};--fg:${m.fg}">
-      <span class="veh-arrow" style="--bearing:${b}deg" title="Fahrtrichtung">▲</span>
+      <span class="veh-arrow" style="--bearing:${b}deg" title="Fahrtrichtung">↑</span>
       <div class="veh kind-${m.kind}">
         <span class="veh-symbol">${m.icon}</span>
         <span class="veh-line">${safeLine}</span>
