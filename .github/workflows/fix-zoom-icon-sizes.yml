@@ -1,6 +1,6 @@
 name: Fix zoom icon sizes
 
-on:
+'on':
   push:
     paths:
       - '.github/workflows/fix-zoom-icon-sizes.yml'
