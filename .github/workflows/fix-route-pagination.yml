@@ -16,39 +16,11 @@ jobs:
       - name: Patch laterThan pagination
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('functions/api/route.js')
-          s=p.read_text(encoding='utf-8')
-          old='''function continuationParams(laterRef) {
-  return new URLSearchParams({
-    laterThan: String(laterRef),
-    results: String(ROUTE_RESULTS),
-    stopovers: "true",
-    polylines: "true",
-    remarks: "true",
-    language: "de",
-    pretty: "false",
-    startWithWalking: "true",
-    walkingSpeed: "normal"
-  });
-}'''
-          new='''function continuationParams(laterRef, baseParams) {
-  const params = new URLSearchParams(baseParams);
-  params.delete("departure");
-  params.delete("arrival");
-  params.set("laterThan", String(laterRef));
-  params.set("results", String(ROUTE_RESULTS));
-  return params;
-}'''
-          assert old in s, 'old continuationParams block not found'
-          s=s.replace(old,new,1)
-          old2='''    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef)}`);'''
-          new2='''    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef, params)}`);'''
-          assert old2 in s, 'pagination call not found'
-          s=s.replace(old2,new2,1)
-          p.write_text(s,encoding='utf-8')
-          PY
+          set -e
+          perl -0pi -e 's/function continuationParams\(laterRef\) \{.*?\n\}/function continuationParams(laterRef, baseParams) {\n  const params = new URLSearchParams(baseParams);\n  params.delete("departure");\n  params.delete("arrival");\n  params.set("laterThan", String(laterRef));\n  params.set("results", String(ROUTE_RESULTS));\n  return params;\n}/s' functions/api/route.js
+          sed -i 's/continuationParams(laterRef)}/continuationParams(laterRef, params)}/' functions/api/route.js
+          grep -q 'continuationParams(laterRef, baseParams)' functions/api/route.js
+          grep -q 'continuationParams(laterRef, params)' functions/api/route.js
           node --check functions/api/route.js
           git diff --check
       - name: Commit
