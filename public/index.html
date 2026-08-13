@@ -882,6 +882,31 @@ function angleDiff(a,b){
   return d;
 }
 
+function distanceMeters(aLat,aLon,bLat,bLon){
+  const vals=[aLat,aLon,bLat,bLon].map(Number);
+  if(!vals.every(Number.isFinite))return null;
+  const [lat1,lon1,lat2,lon2]=vals;
+  const R=6371000;
+  const p1=lat1*Math.PI/180,p2=lat2*Math.PI/180;
+  const dp=(lat2-lat1)*Math.PI/180,dl=(lon2-lon1)*Math.PI/180;
+  const h=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+
+function routeApproachInfo(d,leg){
+  const boardLat=Number(leg.boardLat),boardLon=Number(leg.boardLon),legBearing=Number(leg.bearing);
+  if(![boardLat,boardLon,legBearing,d.lat,d.lon].every(Number.isFinite))return null;
+  const dist=distanceMeters(boardLat,boardLon,d.lat,d.lon);
+  if(!Number.isFinite(dist))return null;
+  const fromBoard=bearingBetween({lat:boardLat,lon:boardLon},{lat:d.lat,lon:d.lon});
+  if(!Number.isFinite(fromBoard))return null;
+  const diff=angleDiff(fromBoard,legBearing);
+  // Positive Projektion = Fahrzeug liegt bereits hinter dem Einstieg in Fahrtrichtung.
+  // Negative Projektion = Fahrzeug befindet sich noch vor dem Einstieg und kommt erst noch.
+  const along=dist*Math.cos(diff*Math.PI/180);
+  return {dist,along,coming:along<=650};
+}
+
 function plannedRouteVehicleMatch(d,{relaxed=false}={}){
   const filter=window.__berlinPlannedVehicleFilter;
   if(!filter||!filter.active||!Array.isArray(filter.legs)||!filter.legs.length)return true;
@@ -892,10 +917,6 @@ function plannedRouteVehicleMatch(d,{relaxed=false}={}){
     .map(canonicalRouteLine).filter(Boolean);
 
   return filter.legs.some(leg=>{
-    const legTrip=String(leg.tripId||"");
-    if(legTrip&&vehicleTrip&&legTrip===vehicleTrip)return true;
-
-    // Bus/Tram/S/U usw. müssen zum geplanten Teilstück passen.
     if(leg.mode&&d.mode&&leg.mode!==d.mode){
       const railA=(leg.mode==="regional"||leg.mode==="express");
       const railB=(d.mode==="regional"||d.mode==="express");
@@ -906,12 +927,14 @@ function plannedRouteVehicleMatch(d,{relaxed=false}={}){
     const sameLine=vehicleLines.some(v=>legLines.some(l=>v===l || (v.length>1&&l.length>1&&(v.endsWith(l)||l.endsWith(v)))));
     if(!sameLine)return false;
 
-    // Fail-safe: wenn die API keine konsistenten Richtungsdaten liefert,
-    // lieber ein Live-Fahrzeug derselben benötigten Linie zeigen als eine leere Karte.
-    if(relaxed)return true;
+    const approach=routeApproachInfo(d,leg);
+    // Wenn wir die Position relativ zum Einstieg bestimmen können, Fahrzeuge nach dem Einstieg ausblenden.
+    if(approach && !approach.coming)return false;
+    // Sehr weit entfernte Fahrzeuge derselben Linie sind für den aktuellen Einstieg nicht hilfreich.
+    if(approach && approach.dist>22000)return false;
 
-    const inArea=![leg.minLat,leg.maxLat,leg.minLon,leg.maxLon].every(Number.isFinite) ||
-      (d.lat>=leg.minLat&&d.lat<=leg.maxLat&&d.lon>=leg.minLon&&d.lon<=leg.maxLon);
+    const legTrip=String(leg.tripId||"");
+    if(legTrip&&vehicleTrip&&legTrip===vehicleTrip)return true;
 
     const legDirection=routeFilterText(leg.direction);
     const textDirectionOk=Boolean(legDirection&&vehicleDirection&&
@@ -919,11 +942,14 @@ function plannedRouteVehicleMatch(d,{relaxed=false}={}){
     if(textDirectionOk)return true;
 
     if(Number.isFinite(Number(leg.bearing))&&Number.isFinite(Number(d.bearing))){
-      const tolerance=inArea?135:80;
+      const tolerance=approach&&approach.dist<5000?120:75;
       if(angleDiff(d.bearing,leg.bearing)<=tolerance)return true;
     }
 
-    return inArea&&(!vehicleDirection||!legDirection);
+    // Relaxed Fallback: gleiche benötigte Linie, aber weiterhin nur Fahrzeuge, die den Einstieg noch nicht passiert haben.
+    if(relaxed)return !approach || approach.coming;
+
+    return Boolean(approach&&approach.coming&&(!vehicleDirection||!legDirection));
   });
 }
 
@@ -977,12 +1003,32 @@ function renderVehicles(){
 
   let plannedIds=null;
   if(plannedFilterActive){
-    const base=[...state.vehicles.entries()].filter(([,d])=>state.enabled.has(d.mode)&&vehicleVisibleInView(d,bounds));
+    const base=[...state.vehicles.entries()].filter(([,d])=>state.enabled.has(d.mode));
     let matches=base.filter(([,d])=>plannedRouteVehicleMatch(d));
     if(!matches.length){
       matches=base.filter(([,d])=>plannedRouteVehicleMatch(d,{relaxed:true}));
     }
     plannedIds=new Set(matches.map(([id])=>id));
+
+    // Beim ersten Anzeigen Route + noch kommende Fahrzeuge gemeinsam in den Ausschnitt nehmen.
+    if(routeFilter.fitVehiclesOnce&&matches.length){
+      routeFilter.fitVehiclesOnce=false;
+      const focus=L.latLngBounds(matches.map(([,d])=>[d.lat,d.lon]));
+      const rb=routeFilter.routeBounds;
+      if(rb&&[rb.south,rb.west,rb.north,rb.east].every(Number.isFinite)){
+        focus.extend([rb.south,rb.west]);
+        focus.extend([rb.north,rb.east]);
+      }
+      if(focus.isValid()){
+        map.fitBounds(focus.pad(.08),{
+          maxZoom:14,
+          paddingTopLeft:[20,70],
+          paddingBottomRight:[20,window.innerWidth<=700?205:20],
+          animate:true,
+          duration:.35
+        });
+      }
+    }
   }
 
   for(const [id,d] of state.vehicles){

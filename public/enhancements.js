@@ -262,12 +262,17 @@
           const y=Math.sin(toRad(last[1]-first[1]))*Math.cos(toRad(last[0]));
           const x=Math.cos(toRad(first[0]))*Math.sin(toRad(last[0]))-Math.sin(toRad(first[0]))*Math.cos(toRad(last[0]))*Math.cos(toRad(last[1]-first[1]));
           const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
+          const boarding=legPoint(leg?.origin);
           relevantVehicleLegs.push({
             line:String(leg?.line?.name||leg?.line?.id||""),
             lineId:String(leg?.line?.id||""),
             mode:product,
             direction:String(leg?.direction||leg?.destination?.name||""),
             tripId:String(leg?.tripId||leg?.trip?.id||""),
+            departure:String(leg?.departure||leg?.plannedDeparture||""),
+            boardName:String(leg?.origin?.name||leg?.origin?.address||""),
+            boardLat:boarding?Number(boarding[0]):null,
+            boardLon:boarding?Number(boarding[1]):null,
             bearing:Number.isFinite(legBearing)?legBearing:null,
             minLat:lats.length?Math.min(...lats)-padLat:null,
             maxLat:lats.length?Math.max(...lats)+padLat:null,
@@ -287,9 +292,14 @@
       if (start) { bounds.extend(start); layers.push(L.marker(start, { pane: "plannerStopPane", icon: endpoint("A") }).addTo(map)); }
       if (end) { bounds.extend(end); layers.push(L.marker(end, { pane: "plannerStopPane", icon: endpoint("B") }).addTo(map)); }
       routeState.layers = layers;
-      window.__berlinPlannedVehicleFilter={active:true,legs:relevantVehicleLegs};
-      map.fire("moveend");
+      window.__berlinPlannedVehicleFilter={
+        active:true,
+        legs:relevantVehicleLegs,
+        fitVehiclesOnce:true,
+        routeBounds:bounds.isValid()?{south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()}:null
+      };
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
+      else map.fire("moveend");
 
       const transfers = Math.max(0, transitLegs.length - 1);
       const dep = legs[0]?.departure || legs[0]?.plannedDeparture;
@@ -303,7 +313,7 @@
         const product = legProduct(leg), info = modeInfo[product] || modeInfo.regional;
         return `<div class="route-leg"><span class="route-leg-badge" style="--leg-color:${info.c};--leg-fg:${info.fg}">${esc(leg?.line?.name || info.label)}</span><div><b>${esc(leg?.origin?.name || "")}</b> → ${esc(leg?.destination?.name || leg?.direction || "")}<div class="stop-meta">${fmtTime(leg?.departure || leg?.plannedDeparture)} – ${fmtTime(leg?.arrival || leg?.plannedArrival)}</div></div></div>`;
       }).join("");
-      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Route + passende Live-Fahrzeuge in deiner Fahrtrichtung</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
+      if (body) body.innerHTML = `<div class="detail-grid"><div class="detail-key">Dauer</div><div><b>${durationText(journey)}</b></div><div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div><div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div><div class="detail-key">Umstiege</div><div>${transfers}</div></div><div class="route-chip"><span class="route-line-sample"></span><span>Route + Live-Fahrzeuge, die deinen Einstieg noch erreichen</span></div><div class="detail-section"><h3>Strecke</h3>${legRows}</div>`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       clearPlannedRoute();
