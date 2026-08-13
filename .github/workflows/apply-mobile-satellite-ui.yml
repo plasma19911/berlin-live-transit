@@ -1,0 +1,108 @@
+name: Apply mobile satellite UI patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-mobile-satellite-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch satellite default and mobile filters
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          def rep(old, new, label):
+              global s
+              c = s.count(old)
+              if c != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {c}')
+              s = s.replace(old, new, 1)
+
+          rep(
+              '<div class="panel glass"><h2>Verkehrsmittel</h2><div id="filters" class="filters"></div></div>',
+              '<div id="transportPanel" class="panel glass transport-panel"><div class="transport-head"><h2>Verkehrsmittel</h2><button id="filterToggle" class="filter-toggle" type="button" aria-expanded="true" title="Verkehrsmittel ein-/ausklappen">⌄</button></div><div id="filters" class="filters"></div></div>',
+              'transport panel'
+          )
+
+          rep(
+              '.panel h2{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#dce7f5}',
+              '.panel h2{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#dce7f5}\n.transport-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.transport-head h2{margin:0 0 10px}.filter-toggle{display:none;width:32px;height:28px;padding:0;border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:9px;font-size:18px;line-height:1;cursor:pointer}.filter-toggle:hover{background:rgba(255,255,255,.1)}',
+              'transport css'
+          )
+
+          rep(
+              '@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.filters{grid-template-columns:repeat(3,1fr)}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:190px}.map-style-menu{right:60px;bottom:190px;width:190px}.warn{bottom:190px}}',
+              '@media(max-width:700px){.top{left:9px;right:9px;top:9px}.brand{padding:8px 10px}.sub{display:none}.status small{display:none}.side{left:9px;right:9px;top:auto;bottom:10px;width:auto}.side .secondary{display:none}.transport-panel{padding:9px 10px}.transport-head h2{margin:0}.filter-toggle{display:grid;place-items:center}.transport-panel.mobile-collapsed .filters{display:none}.transport-panel.mobile-collapsed{padding:7px 9px}.filters{grid-template-columns:repeat(3,1fr);margin-top:8px}.filter{padding:7px 5px;font-size:10px}.cnt{display:none}.controls{right:9px;bottom:126px}.map-style-menu{right:60px;bottom:126px;width:190px}.warn{bottom:126px}body:not(.filters-collapsed) .controls{bottom:190px}body:not(.filters-collapsed) .map-style-menu{bottom:190px}body:not(.filters-collapsed) .warn{bottom:190px}}',
+              'mobile css'
+          )
+
+          sat = '    <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>\n'
+          if s.count(sat) != 1:
+              raise SystemExit(f'satellite item: expected 1 match, got {s.count(sat)}')
+          s = s.replace(sat, '', 1)
+          rep('  <div class="map-style-list">\n', '  <div class="map-style-list">\n' + sat, 'map menu')
+
+          rep(
+              '''function savedMapStyle(){
+            try{
+              const key=localStorage.getItem("berlin-live-transit-map-style");
+              return MAP_STYLES[key]?key:"dark";
+            }catch{return "dark"}
+          }''',
+              '''function savedMapStyle(){
+            return "satellite";
+          }''',
+              'satellite default'
+          )
+
+          rep(
+              'buildFilters();\nupdateFocusButton();\n',
+              '''buildFilters();
+          updateFocusButton();
+
+          function setFiltersCollapsed(collapsed){
+            const panel=$("transportPanel");
+            const btn=$("filterToggle");
+            if(!panel||!btn)return;
+            const on=Boolean(collapsed)&&window.innerWidth<=700;
+            panel.classList.toggle("mobile-collapsed",on);
+            document.body.classList.toggle("filters-collapsed",on);
+            btn.setAttribute("aria-expanded",String(!on));
+            btn.textContent=on?"›":"⌄";
+            btn.title=on?"Verkehrsmittel anzeigen":"Verkehrsmittel minimieren";
+            setTimeout(()=>map.invalidateSize(false),50);
+          }
+
+          $("filterToggle").addEventListener("click",()=>{
+            setFiltersCollapsed(!$("transportPanel").classList.contains("mobile-collapsed"));
+          });
+          if(window.innerWidth<=700)setFiltersCollapsed(true);
+          window.addEventListener("resize",()=>{
+            if(window.innerWidth>700)setFiltersCollapsed(false);
+          });
+          ''',
+              'filter toggle logic'
+          )
+
+          p.write_text(s, encoding='utf-8')
+          os.remove('.github/workflows/apply-mobile-satellite-ui.yml')
+          PY
+
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Satellite default and collapsible mobile filters"
+          git push
