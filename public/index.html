@@ -127,7 +127,9 @@
   .detail-panel{left:auto;right:8px;top:72px;width:min(320px,calc(100% - 16px));max-height:42vh}
 }
 @media(max-width:700px){
-  body.detail-open .side{display:none}
+  /* Keep the search usable while a trip is open. Only hide the non-search panels. */
+  body.detail-open .side{display:flex;top:72px;bottom:auto}
+  body.detail-open .side .panel:not(:first-child){display:none}
   body.detail-open .controls{bottom:205px}
   body.detail-open .warn{bottom:205px}
 
@@ -245,7 +247,9 @@ map.getPane("routePane").style.pointerEvents="none";
 
 map.createPane("tripStopPane");
 map.getPane("tripStopPane").style.zIndex="640";
-map.getPane("tripStopPane").style.pointerEvents="auto";
+// IMPORTANT: this pane contains a full-size Leaflet canvas. If pointer events are enabled,
+// that canvas sits above the vehicle markers and swallows every later click.
+map.getPane("tripStopPane").style.pointerEvents="none";
 
 const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,routeLayer:null,stopLayer:null,renderMode:null,tripController:null,selectionSeq:0};
 const $=id=>document.getElementById(id);
@@ -572,6 +576,8 @@ async function loadTripDetails(d){
         const isPast=index<nextIndex;
         const marker=L.circleMarker(p,{
           pane:"tripStopPane",
+          interactive:false,
+          bubblingMouseEvents:false,
           radius:isNext?(window.innerWidth<=700?7:6):(window.innerWidth<=700?4:(map.getZoom()<=11?2.5:3.5)),
           color:isNext?"#ffffff":(modes[d.mode]?.c||"#4da8ff"),
           weight:isNext?3:2,
@@ -579,10 +585,6 @@ async function loadTripDetails(d){
           fillOpacity:isPast?0.6:1,
           opacity:isPast?0.7:1
         });
-        marker.bindTooltip(
-          `${esc(s?.stop?.name||s?.name||"Haltestelle")} · ${fmtTime(s?.departure||s?.arrival)}`,
-          {direction:"top",offset:[0,-4]}
-        );
         return marker;
       });
       state.stopLayer=L.layerGroup(stopMarkers).addTo(map);
