@@ -21,39 +21,44 @@ jobs:
         shell: bash
         run: |
           set +e
-
           echo '=== PUBLIC HOME ==='
           curl -LsS --max-time 25 -o /tmp/index.html -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/'
-
           echo '=== PUBLIC RADAR ==='
           curl -LsS --max-time 40 -o /tmp/radar.json -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/api/radar-berlin'
           python -c "import json; d=json.load(open('/tmp/radar.json')); print('movements=',len(d.get('movements',[]))); print('meta=',d.get('meta')); print('error=',d.get('error')); print('details=',d.get('details'))" 2>/dev/null || head -c 800 /tmp/radar.json
           echo
-
           echo '=== PUBLIC ROUTE ==='
           curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w 'http=%{http_code} time=%{time_total}\n'
           python -c "import json; d=json.load(open('/tmp/route.json')); print('journey=',bool(d.get('journey')),'within_hour=',len(d.get('journeysWithinHour',[])),'error=',d.get('error'))" 2>/dev/null || head -c 500 /tmp/route.json
           echo
-
-          echo '=== DIRECT VBB CURRENT 30s/3f ==='
+          echo '=== DIRECT VBB RADAR ==='
           curl -LsS --max-time 25 -o /tmp/vbb-current.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=30&frames=3&polylines=false&language=de&pretty=false'
           python -c "import json; d=json.load(open('/tmp/vbb-current.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-current.json
           echo
 
-          echo '=== DIRECT VBB LIGHT 5s/1f ==='
-          curl -LsS --max-time 25 -o /tmp/vbb-light.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=5&frames=1&polylines=false&language=de&pretty=false'
-          python -c "import json; d=json.load(open('/tmp/vbb-light.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-light.json
-          echo
+      - name: Diagnose direct VBB journeys
+        shell: bash
+        run: |
+          set +e
+          curl -LsS --max-time 20 'https://v6.vbb.transport.rest/locations?query=Alexanderplatz%2C%20Berlin&results=3&stops=true&addresses=true&poi=true&language=de&pretty=false' -o /tmp/from.json
+          curl -LsS --max-time 20 'https://v6.vbb.transport.rest/locations?query=Hauptbahnhof%2C%20Berlin&results=3&stops=true&addresses=true&poi=true&language=de&pretty=false' -o /tmp/to.json
+          FROM=$(python -c "import json; d=json.load(open('/tmp/from.json')); print(next((x.get('id') for x in d if x.get('id')),''))")
+          TO=$(python -c "import json; d=json.load(open('/tmp/to.json')); print(next((x.get('id') for x in d if x.get('id')),''))")
+          echo "from_id=$FROM to_id=$TO"
+          curl -LsS --max-time 30 --get 'https://v6.vbb.transport.rest/journeys' --data-urlencode "from=$FROM" --data-urlencode "to=$TO" --data-urlencode 'results=4' --data-urlencode 'stopovers=true' --data-urlencode 'polylines=true' --data-urlencode 'remarks=true' --data-urlencode 'language=de' --data-urlencode 'pretty=false' -o /tmp/journeys.json -w 'journeys_http=%{http_code} time=%{time_total}\n'
+          python -c "import json; d=json.load(open('/tmp/journeys.json')); print('journeys=',len(d.get('journeys',[]))); print('laterRef=',bool(d.get('laterRef'))); print('message=',d.get('message')); print('error=',d.get('error'))" 2>/dev/null || head -c 800 /tmp/journeys.json
+          LATER=$(python -c "import json; d=json.load(open('/tmp/journeys.json')); print(d.get('laterRef',''))" 2>/dev/null)
+          if [ -n "$LATER" ]; then
+            curl -LsS --max-time 30 --get 'https://v6.vbb.transport.rest/journeys' --data-urlencode "laterThan=$LATER" --data-urlencode 'results=4' --data-urlencode 'stopovers=true' --data-urlencode 'polylines=true' --data-urlencode 'remarks=true' --data-urlencode 'language=de' --data-urlencode 'pretty=false' -o /tmp/later.json -w 'later_http=%{http_code} time=%{time_total}\n'
+            python -c "import json; d=json.load(open('/tmp/later.json')); print('later_journeys=',len(d.get('journeys',[]))); print('message=',d.get('message')); print('error=',d.get('error'))" 2>/dev/null || head -c 800 /tmp/later.json
+          fi
 
       - name: Diagnose browser rendering
         shell: bash
         run: |
           set +e
           CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
-          echo "chrome=$CHROME"
           "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=20000 --dump-dom 'https://berlin-live-transit.pages.dev/' > /tmp/dom.html 2>/tmp/chrome.err
           echo "chrome_exit=$?"
-          echo "vehicle_dom_nodes=$(grep -o 'class=\"vicon' /tmp/dom.html | wc -l)"
           echo "vehicle_wrap_nodes=$(grep -o 'veh-wrap' /tmp/dom.html | wc -l)"
           python -c "import re; s=open('/tmp/dom.html').read(); print('total_text=',re.search(r'id=\"total\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"total\"[^>]*>([^<]*)',s) else 'missing'); print('visible_text=',re.search(r'id=\"visible\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"visible\"[^>]*>([^<]*)',s) else 'missing'); print('status_text=',re.search(r'id=\"st\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"st\"[^>]*>([^<]*)',s) else 'missing')"
-          tail -n 30 /tmp/chrome.err
