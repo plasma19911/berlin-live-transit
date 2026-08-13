@@ -1012,8 +1012,8 @@ function renderVehicles(){
   const zoom=map.getZoom();
   const routeFilter=window.__berlinPlannedVehicleFilter;
   const plannedFilterActive=Boolean(routeFilter?.active&&Array.isArray(routeFilter.legs)&&routeFilter.legs.length);
-  const mode=plannedFilterActive?"icons":(zoom<=11?"dots":"icons");
-  const bounds=map.getBounds().pad(plannedFilterActive?0.80:(zoom<=11?0.03:0.12));
+  const mode=plannedFilterActive?"icons":(zoom<=9?"dots":"icons");
+  const bounds=map.getBounds().pad(plannedFilterActive?0.80:(zoom<=9?0.03:0.12));
   const wanted=new Set();
   let visible=0;
 
