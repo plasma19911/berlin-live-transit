@@ -1,0 +1,53 @@
+name: Compact overview vehicle icons
+
+'on':
+  push:
+    paths:
+      - '.github/workflows/compact-overview-icons.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make overview icons smaller
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text(encoding='utf-8')
+
+          old='''.zoom-mid .veh-line{font-size:7px}\n/* mobile-readability-fix */'''
+          new='''.zoom-mid .veh-line{font-size:7px}\n/* Compact overview at the initial Berlin zoom: keep the map readable while preserving real icons + arrows. */\n.zoom-overview .veh-wrap{\n  transform:scale(.62);\n  transform-origin:50% 50%;\n}\n@media(max-width:700px){\n  .zoom-overview .veh-wrap{transform:scale(.52)}\n}\n/* mobile-readability-fix */'''
+          assert old in s, 'overview CSS insertion point not found'
+          s=s.replace(old,new,1)
+
+          old='''  el.classList.toggle("zoom-far",z<=9);\n  el.classList.toggle("zoom-mid",z===12||z===13);'''
+          new='''  el.classList.toggle("zoom-far",z<=9);\n  el.classList.toggle("zoom-overview",z===10||z===11);\n  el.classList.toggle("zoom-mid",z===12||z===13);'''
+          assert old in s, 'marker density block not found'
+          s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('public/index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/index-inline.js').write_text(max(blocks,key=len),encoding='utf-8')
+          PY
+          node --check /tmp/index-inline.js
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/compact-overview-icons.yml
+          git add public/index.html
+          git commit -m "Shrink vehicle icons in overview zoom"
+          git push
