@@ -1,0 +1,62 @@
+name: Fix VBB route pagination
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-route-pagination.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch laterThan pagination
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('functions/api/route.js')
+          s=p.read_text(encoding='utf-8')
+          old='''function continuationParams(laterRef) {
+  return new URLSearchParams({
+    laterThan: String(laterRef),
+    results: String(ROUTE_RESULTS),
+    stopovers: "true",
+    polylines: "true",
+    remarks: "true",
+    language: "de",
+    pretty: "false",
+    startWithWalking: "true",
+    walkingSpeed: "normal"
+  });
+}'''
+          new='''function continuationParams(laterRef, baseParams) {
+  const params = new URLSearchParams(baseParams);
+  params.delete("departure");
+  params.delete("arrival");
+  params.set("laterThan", String(laterRef));
+  params.set("results", String(ROUTE_RESULTS));
+  return params;
+}'''
+          assert old in s, 'old continuationParams block not found'
+          s=s.replace(old,new,1)
+          old2='''    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef)}`);'''
+          new2='''    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef, params)}`);'''
+          assert old2 in s, 'pagination call not found'
+          s=s.replace(old2,new2,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          node --check functions/api/route.js
+          git diff --check
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "ChatGPT Route Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/fix-route-pagination.yml
+          git add functions/api/route.js
+          git commit -m "Fix VBB later journey pagination"
+          git push
