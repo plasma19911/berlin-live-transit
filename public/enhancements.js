@@ -255,10 +255,18 @@
           const lons=coords.map(p=>Number(p[1])).filter(Number.isFinite);
           const padLat=.018;
           const padLon=.030;
+          const first=coords[0], last=coords[coords.length-1];
+          const toRad=x=>Number(x)*Math.PI/180;
+          const toDeg=x=>Number(x)*180/Math.PI;
+          const y=Math.sin(toRad(last[1]-first[1]))*Math.cos(toRad(last[0]));
+          const x=Math.cos(toRad(first[0]))*Math.sin(toRad(last[0]))-Math.sin(toRad(first[0]))*Math.cos(toRad(last[0]))*Math.cos(toRad(last[1]-first[1]));
+          const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
           relevantVehicleLegs.push({
             line:String(leg?.line?.name||leg?.line?.id||""),
+            mode:product,
             direction:String(leg?.direction||leg?.destination?.name||""),
             tripId:String(leg?.tripId||leg?.trip?.id||""),
+            bearing:Number.isFinite(legBearing)?legBearing:null,
             minLat:lats.length?Math.min(...lats)-padLat:null,
             maxLat:lats.length?Math.max(...lats)+padLat:null,
             minLon:lons.length?Math.min(...lons)-padLon:null,

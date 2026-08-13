@@ -869,11 +869,23 @@ function routeFilterText(value){
     .trim();
 }
 
+function canonicalRouteLine(value){
+  return routeFilterText(value)
+    .replace(/^(bus|tram|strassenbahn|sbahn|ubahn|regionalbahn|regionalexpress|express)+/,"");
+}
+
+function angleDiff(a,b){
+  if(!Number.isFinite(Number(a))||!Number.isFinite(Number(b)))return 180;
+  let d=Math.abs((Number(a)-Number(b))%360);
+  if(d>180)d=360-d;
+  return d;
+}
+
 function plannedRouteVehicleMatch(d){
   const filter=window.__berlinPlannedVehicleFilter;
   if(!filter||!filter.active||!Array.isArray(filter.legs)||!filter.legs.length)return true;
 
-  const vehicleLine=routeFilterText(d.line);
+  const vehicleLine=canonicalRouteLine(d.line);
   const vehicleDirection=routeFilterText(d.raw?.direction||d.raw?.destination?.name||d.raw?.destination||"");
   const vehicleTrip=String(d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id||"");
 
@@ -881,17 +893,27 @@ function plannedRouteVehicleMatch(d){
     const legTrip=String(leg.tripId||"");
     if(legTrip&&vehicleTrip&&legTrip===vehicleTrip)return true;
 
-    if(!vehicleLine||vehicleLine!==routeFilterText(leg.line))return false;
+    if(leg.mode&&d.mode&&leg.mode!==d.mode)return false;
+    if(!vehicleLine||vehicleLine!==canonicalRouteLine(leg.line))return false;
+
+    const inArea=![leg.minLat,leg.maxLat,leg.minLon,leg.maxLon].every(Number.isFinite) ||
+      (d.lat>=leg.minLat&&d.lat<=leg.maxLat&&d.lon>=leg.minLon&&d.lon<=leg.maxLon);
+    if(!inArea)return false;
 
     const legDirection=routeFilterText(leg.direction);
-    if(!legDirection||!vehicleDirection)return false;
-    const sameDirection=vehicleDirection.includes(legDirection)||legDirection.includes(vehicleDirection);
-    if(!sameDirection)return false;
+    const textDirectionOk=Boolean(legDirection&&vehicleDirection&&
+      (vehicleDirection.includes(legDirection)||legDirection.includes(vehicleDirection)));
+    if(textDirectionOk)return true;
 
-    if([leg.minLat,leg.maxLat,leg.minLon,leg.maxLon].every(Number.isFinite)){
-      return d.lat>=leg.minLat&&d.lat<=leg.maxLat&&d.lon>=leg.minLon&&d.lon<=leg.maxLon;
+    // VBB radar direction labels are not always formatted like journey direction labels.
+    // In that case use the vehicle's live bearing and the planned leg bearing.
+    if(Number.isFinite(Number(leg.bearing))&&Number.isFinite(Number(d.bearing))){
+      return angleDiff(d.bearing,leg.bearing)<=95;
     }
-    return true;
+
+    // Last fallback: same mode + same line + inside the relevant route corridor.
+    // This is preferable to hiding every relevant vehicle when the upstream omits direction metadata.
+    return !vehicleDirection||!legDirection;
   });
 }
 
@@ -941,11 +963,12 @@ function renderVehicles(){
   const wanted=new Set();
   let visible=0;
 
+  const plannedFilterActive=Boolean(window.__berlinPlannedVehicleFilter?.active);
   for(const [id,d] of state.vehicles){
     if(!state.enabled.has(d.mode))continue;
     if(!plannedRouteVehicleMatch(d))continue;
-    if(state.query&&!d.search.includes(state.query))continue;
-    if(state.focusSelected&&!isSelectedVehicle(d))continue;
+    if(!plannedFilterActive&&state.query&&!d.search.includes(state.query))continue;
+    if(!plannedFilterActive&&state.focusSelected&&!isSelectedVehicle(d))continue;
     if(!vehicleVisibleInView(d,bounds))continue;
 
     wanted.add(id);
