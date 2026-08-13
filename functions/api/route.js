@@ -3,6 +3,9 @@ const UPSTREAMS = [
   "https://v6.bvg.transport.rest"
 ];
 
+const ROUTE_WINDOW_MINUTES = 60;
+const ROUTE_RESULTS = 16;
+
 function json(data, status = 200) {
   return Response.json(data, {
     status,
@@ -48,7 +51,7 @@ function chooseLocation(items, query) {
   return ranked[0]?.item || null;
 }
 
-async function fetchJson(url, timeoutMs = 7000) {
+async function fetchJson(url, timeoutMs = 9000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -56,7 +59,7 @@ async function fetchJson(url, timeoutMs = 7000) {
       signal: controller.signal,
       headers: {
         accept: "application/json",
-        "user-agent": "berlin-live-transit-map/1.1"
+        "user-agent": "berlin-live-transit-map/1.2"
       },
       cf: { cacheTtl: 15, cacheEverything: true }
     });
@@ -112,16 +115,30 @@ function addLocation(params, prefix, item) {
   }
 }
 
+function journeyDepartureMs(journey) {
+  const legs = Array.isArray(journey?.legs) ? journey.legs : [];
+  if (!legs.length) return NaN;
+  return new Date(legs[0]?.departure || legs[0]?.plannedDeparture || 0).getTime();
+}
+
 function journeyScore(journey) {
   const legs = Array.isArray(journey?.legs) ? journey.legs : [];
   if (!legs.length) return Number.POSITIVE_INFINITY;
-  const departure = new Date(legs[0]?.departure || legs[0]?.plannedDeparture || 0).getTime();
+  const departure = journeyDepartureMs(journey);
   const arrival = new Date(legs.at(-1)?.arrival || legs.at(-1)?.plannedArrival || 0).getTime();
   if (!Number.isFinite(departure) || !Number.isFinite(arrival) || arrival <= departure) return Number.POSITIVE_INFINITY;
   const cancelled = legs.some(l => l?.cancelled) ? 24 * 60 : 0;
   const transitLegs = legs.filter(l => l?.line && !l?.walking).length;
   const transfers = Math.max(0, transitLegs - 1);
   return (arrival - departure) / 60000 + transfers * 2.5 + cancelled;
+}
+
+function journeyIdentity(journey) {
+  const legs = Array.isArray(journey?.legs) ? journey.legs : [];
+  return legs.map(leg => {
+    if (leg?.walking) return `walk:${leg?.origin?.name || ""}>${leg?.destination?.name || ""}`;
+    return `${leg?.tripId || ""}:${leg?.line?.id || leg?.line?.name || ""}:${leg?.departure || leg?.plannedDeparture || ""}`;
+  }).join("|");
 }
 
 async function routeVia(base, fromText, toText) {
@@ -132,8 +149,11 @@ async function routeVia(base, fromText, toText) {
   if (!from) throw new Error(`Start nicht gefunden: ${fromText}`);
   if (!to) throw new Error(`Ziel nicht gefunden: ${toText}`);
 
+  const requestedAt = Date.now();
+  const windowUntil = requestedAt + ROUTE_WINDOW_MINUTES * 60 * 1000;
   const params = new URLSearchParams({
-    results: "5",
+    departure: new Date(requestedAt).toISOString(),
+    results: String(ROUTE_RESULTS),
     stopovers: "true",
     polylines: "true",
     remarks: "true",
@@ -147,15 +167,36 @@ async function routeVia(base, fromText, toText) {
 
   const data = await fetchJson(`${base}/journeys?${params}`);
   const journeys = Array.isArray(data?.journeys) ? data.journeys : [];
-  const usable = journeys.filter(j => Array.isArray(j?.legs) && j.legs.length);
-  usable.sort((a, b) => journeyScore(a) - journeyScore(b));
-  if (!usable.length) throw new Error("Keine ÖPNV-Verbindung gefunden.");
+  const usableRaw = journeys.filter(j => Array.isArray(j?.legs) && j.legs.length);
 
+  const unique = new Map();
+  for (const journey of usableRaw) {
+    const key = journeyIdentity(journey);
+    if (!unique.has(key)) unique.set(key, journey);
+  }
+  const usable = [...unique.values()];
+
+  const journeysWithinHour = usable
+    .filter(j => {
+      const departure = journeyDepartureMs(j);
+      return Number.isFinite(departure) && departure >= requestedAt - 2 * 60 * 1000 && departure <= windowUntil;
+    })
+    .sort((a, b) => journeyDepartureMs(a) - journeyDepartureMs(b));
+
+  const candidates = journeysWithinHour.length ? journeysWithinHour : usable;
+  const ranked = [...candidates].sort((a, b) => journeyScore(a) - journeyScore(b));
+  if (!ranked.length) throw new Error("Keine ÖPNV-Verbindung gefunden.");
+
+  const journey = ranked[0];
   return {
     from,
     to,
-    journey: usable[0],
-    alternatives: usable.slice(1, 3),
+    journey,
+    journeysWithinHour,
+    alternatives: ranked.filter(j => j !== journey).slice(0, 7),
+    routeWindowMinutes: ROUTE_WINDOW_MINUTES,
+    routeWindowStart: new Date(requestedAt).toISOString(),
+    routeWindowEnd: new Date(windowUntil).toISOString(),
     realtimeDataUpdatedAt: data?.realtimeDataUpdatedAt || null
   };
 }
