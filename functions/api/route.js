@@ -151,18 +151,13 @@ function journeyIdentity(journey) {
   }).join("|");
 }
 
-function continuationParams(laterRef) {
-  return new URLSearchParams({
-    laterThan: String(laterRef),
-    results: String(ROUTE_RESULTS),
-    stopovers: "true",
-    polylines: "true",
-    remarks: "true",
-    language: "de",
-    pretty: "false",
-    startWithWalking: "true",
-    walkingSpeed: "normal"
-  });
+function continuationParams(laterRef, baseParams) {
+  const params = new URLSearchParams(baseParams);
+  params.delete("departure");
+  params.delete("arrival");
+  params.set("laterThan", String(laterRef));
+  params.set("results", String(ROUTE_RESULTS));
+  return params;
 }
 
 async function routeVia(base, fromText, toText) {
@@ -196,7 +191,7 @@ async function routeVia(base, fromText, toText) {
   let realtimeDataUpdatedAt = firstPage?.realtimeDataUpdatedAt || null;
 
   while (laterRef && laterPages < MAX_LATER_PAGES && latestDepartureMs(allJourneys) < windowUntil) {
-    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef)}`);
+    const page = await fetchJson(`${base}/journeys?${continuationParams(laterRef, params)}`);
     const more = Array.isArray(page?.journeys) ? page.journeys : [];
     if (!more.length) break;
     allJourneys.push(...more);
