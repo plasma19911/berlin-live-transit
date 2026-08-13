@@ -44,3 +44,16 @@ jobs:
           curl -LsS --max-time 25 -o /tmp/vbb-light.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=5&frames=1&polylines=false&language=de&pretty=false'
           python -c "import json; d=json.load(open('/tmp/vbb-light.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-light.json
           echo
+
+      - name: Diagnose browser rendering
+        shell: bash
+        run: |
+          set +e
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          echo "chrome=$CHROME"
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=20000 --dump-dom 'https://berlin-live-transit.pages.dev/' > /tmp/dom.html 2>/tmp/chrome.err
+          echo "chrome_exit=$?"
+          echo "vehicle_dom_nodes=$(grep -o 'class=\"vicon' /tmp/dom.html | wc -l)"
+          echo "vehicle_wrap_nodes=$(grep -o 'veh-wrap' /tmp/dom.html | wc -l)"
+          python -c "import re; s=open('/tmp/dom.html').read(); print('total_text=',re.search(r'id=\"total\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"total\"[^>]*>([^<]*)',s) else 'missing'); print('visible_text=',re.search(r'id=\"visible\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"visible\"[^>]*>([^<]*)',s) else 'missing'); print('status_text=',re.search(r'id=\"st\"[^>]*>([^<]*)',s).group(1) if re.search(r'id=\"st\"[^>]*>([^<]*)',s) else 'missing')"
+          tail -n 30 /tmp/chrome.err
