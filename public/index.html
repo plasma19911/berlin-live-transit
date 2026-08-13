@@ -80,23 +80,22 @@ body.map-bright .veh{
 .kind-replacement .veh-line{max-width:46px;font-size:10px;line-height:11px}
 .kind-s .veh-line,.kind-u .veh-line{font-size:8px}
 .veh-arrow{
-  position:absolute;left:50%;top:-12px;
-  width:22px;height:22px;margin-left:-11px;
+  position:absolute;left:50%;top:-10px;
+  width:20px;height:20px;margin-left:-10px;
   display:grid;place-items:center;
-  color:#fff;background:rgba(5,10,18,.96);
-  border:2px solid #fff;border-radius:50%;
-  font-size:17px;line-height:18px;font-weight:1000;
+  color:#f2f4f7;
+  font-size:18px;line-height:1;font-weight:1000;
   transform:rotate(var(--bearing,0deg));
-  transform-origin:50% 36px;
+  transform-origin:50% 31px;
   transition:transform .25s ease;
   pointer-events:none;
-  text-shadow:none;
-  box-shadow:0 0 0 1px rgba(0,0,0,.68),0 2px 7px rgba(0,0,0,.62);
-  filter:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
 }
 body.map-bright .veh-arrow{
-  color:#fff;background:rgba(5,10,18,.96);
-  border-color:#fff;text-shadow:none;filter:none;
+  color:#5a6470;
+  text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));
 }
 .veh-wrap.no-bearing .veh-arrow{display:none}
 .veh-wrap:hover .veh{transform:scale(1.06)}
@@ -116,7 +115,7 @@ body.map-bright .veh-arrow{
   .veh-line{font-size:9px;line-height:10px;max-width:38px}
   .kind-bus .veh-line,.kind-tram .veh-line{font-size:10px;line-height:11px;max-width:40px}
   .kind-replacement .veh-line{font-size:9px;line-height:10px;max-width:42px}
-  .veh-arrow{top:-11px;font-size:16px;line-height:16px;width:20px;height:20px;margin-left:-10px;transform-origin:50% 33px}
+  .veh-arrow{top:-8px;font-size:17px;line-height:1;width:18px;height:18px;margin-left:-9px;transform-origin:50% 27px}
 }
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#101722;color:var(--text);border:1px solid var(--border)}.leaflet-popup-close-button{color:#dce9f8!important}.popup{font-size:11px;line-height:1.5}.muted{color:var(--muted)}
 .warn{position:absolute;z-index:1001;left:50%;bottom:26px;transform:translateX(-50%);max-width:min(650px,calc(100% - 30px));padding:10px 13px;border-radius:12px;background:rgba(54,34,10,.94);border:1px solid rgba(255,209,102,.3);color:#ffe4a1;font-size:11px;display:none}.warn.show{display:block}
@@ -478,7 +477,7 @@ function icon(line,mode,bearing){
   return L.divIcon({
     className:"vicon",
     html:`<div class="veh-wrap ${hasBearing?"":"no-bearing"}" style="--c:${m.c};--fg:${m.fg}">
-      <span class="veh-arrow" style="--bearing:${b}deg" title="Fahrtrichtung">↑</span>
+      <span class="veh-arrow" style="--bearing:${b}deg" title="Fahrtrichtung">▲</span>
       <div class="veh kind-${m.kind}">
         <span class="veh-symbol">${m.icon}</span>
         <span class="veh-line">${safeLine}</span>
