@@ -52,6 +52,7 @@
   border-radius:9px;
   box-shadow:0 0 0 1px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.42);
   transition:transform .12s ease,opacity .12s ease;
+  z-index:2;
 }
 body.map-bright .veh{
   box-shadow:0 0 0 2px rgba(3,10,18,.78),0 3px 9px rgba(0,0,0,.30);
@@ -86,9 +87,10 @@ body.map-bright .veh{
   color:#f2f4f7;
   font-size:18px;line-height:1;font-weight:1000;
   transform:rotate(var(--bearing,0deg));
-  transform-origin:50% 31px;
+  transform-origin:50% 50%;
   transition:transform .25s ease;
   pointer-events:none;
+  z-index:5;
   text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
 }
@@ -97,7 +99,7 @@ body.map-bright .veh-arrow{
   text-shadow:0 0 2px rgba(255,255,255,1),0 1px 4px rgba(255,255,255,.95);
   filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));
 }
-.veh-wrap.no-bearing .veh-arrow{display:none}
+.veh-wrap.no-bearing .veh-arrow{display:grid}
 .veh-wrap:hover .veh{transform:scale(1.06)}
 .leaflet-zoom-animated .veh{will-change:transform}
 @media(max-width:700px){
