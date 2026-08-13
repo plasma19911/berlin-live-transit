@@ -264,6 +264,7 @@
           const legBearing=(toDeg(Math.atan2(y,x))+360)%360;
           relevantVehicleLegs.push({
             line:String(leg?.line?.name||leg?.line?.id||""),
+            lineId:String(leg?.line?.id||""),
             mode:product,
             direction:String(leg?.direction||leg?.destination?.name||""),
             tripId:String(leg?.tripId||leg?.trip?.id||""),
@@ -399,6 +400,7 @@
     search.addEventListener("click", intercept, true);
     input.addEventListener("keydown", e => { if (e.key === "Enter") intercept(e); }, true);
     $("clearRoutes")?.addEventListener("click", clearPlannedRoute, true);
+    $("detailClose")?.addEventListener("click", () => { if (window.__berlinPlannedVehicleFilter?.active) clearPlannedRoute(); }, true);
     const clear = $("clearRoutes");
     if (clear) clear.title = "Ausgewählte Linien und geplante Route löschen";
   }
