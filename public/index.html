@@ -184,6 +184,75 @@ body.map-bright .veh-arrow{
 .zoom-far .kind-s .veh-symbol,.zoom-far .kind-u .veh-symbol{font-size:15px}
 .zoom-far .veh-arrow{top:-4px;font-size:10px;width:12px;height:12px;margin-left:-6px;transform-origin:50% 21px}
 .zoom-mid .veh-line{font-size:7px}
+/* mobile-readability-fix */
+.controls{
+  padding:6px;
+  background:rgba(6,11,18,.82);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:17px;
+  box-shadow:0 8px 28px rgba(0,0,0,.48);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.controls .btn{
+  background:rgba(13,20,30,.80);
+  border-color:rgba(255,255,255,.18);
+  box-shadow:0 2px 8px rgba(0,0,0,.30);
+}
+.controls .btn:hover{background:rgba(25,35,49,.92)}
+.leaflet-control-attribution{
+  background:rgba(5,10,16,.78)!important;
+  color:rgba(235,243,255,.72)!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  border-radius:7px!important;
+  padding:2px 5px!important;
+  margin-left:8px!important;
+  margin-bottom:8px!important;
+  font-size:7px!important;
+  line-height:1.15!important;
+  max-width:min(72vw,520px)!important;
+  box-shadow:0 3px 12px rgba(0,0,0,.28)!important;
+}
+.leaflet-control-attribution a{color:rgba(220,237,255,.86)!important}
+@media(max-width:700px){
+  .side{bottom:calc(10px + env(safe-area-inset-bottom))}
+  .transport-panel{
+    background:rgba(7,12,19,.94)!important;
+    border-color:rgba(255,255,255,.16)!important;
+    box-shadow:0 8px 26px rgba(0,0,0,.44)!important;
+  }
+  .transport-head{min-height:34px;align-items:center}
+  .transport-head h2{
+    margin:0!important;
+    color:#f4f8ff!important;
+    font-size:12px!important;
+    letter-spacing:.07em!important;
+  }
+  .transport-head h2::before{content:"☰ ";color:#9ed1ff}
+  .filter-toggle{
+    display:grid!important;
+    place-items:center;
+    background:rgba(255,255,255,.08)!important;
+    border-color:rgba(255,255,255,.18)!important;
+    color:#fff!important;
+  }
+  .transport-panel.mobile-collapsed{min-height:46px;padding:6px 9px!important}
+  .controls{
+    right:9px!important;
+    border-radius:16px;
+    background:rgba(4,9,15,.86);
+  }
+  .controls .btn{background:rgba(11,18,27,.86)}
+  .leaflet-control-attribution{
+    margin-left:9px!important;
+    margin-bottom:136px!important;
+    max-width:calc(100vw - 100px)!important;
+    font-size:6.5px!important;
+    white-space:normal!important;
+  }
+  body:not(.filters-collapsed) .leaflet-control-attribution{margin-bottom:200px!important}
+}
+
 </style>
 </head>
 <body>
@@ -253,10 +322,11 @@ const MAP_STYLES={
   satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"}}
 };
 
-const map = L.map("map",{zoomControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);
+const map = L.map("map",{zoomControl:false,attributionControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);
 let baseLayer=null;
 let currentMapStyle="dark";
 L.control.zoom({position:"topright"}).addTo(map);
+L.control.attribution({position:"bottomleft",prefix:false}).addTo(map);
 
 // Dedicated panes keep the selected route and stops visible above dense vehicle markers.
 map.createPane("routeHaloPane");
