@@ -14,7 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply trip-aware vehicle filter
-        run: python .github/live_route_trip_validation_patch.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.github/live_route_trip_validation_patch.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("if 'GEPLANT ·' in enh or 'syncPlannedVehicleMarkers' in enh:", "if 'function syncPlannedVehicleMarkers' in enh:")
+          p.write_text(s,encoding='utf-8')
+          PY
+          python .github/live_route_trip_validation_patch.py
       - name: Validate JavaScript
         run: |
           node --check public/enhancements.js
