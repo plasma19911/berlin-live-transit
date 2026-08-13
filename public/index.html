@@ -21,10 +21,10 @@
 .legend-sign.kind-u{font-size:16px}
 .legend-sign.kind-bus,.legend-sign.kind-tram{font-size:14px}
 .legend-sign.kind-ferry{border-radius:50%}
-.search{display:flex;gap:7px}.search input{flex:1;min-width:0;border:1px solid var(--border);background:rgba(255,255,255,.045);color:var(--text);border-radius:11px;padding:9px 10px;outline:none}.btn{border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:11px;padding:8px 10px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.1)}
+.search{display:flex;gap:7px}.search input{flex:1;min-width:0;border:1px solid var(--border);background:rgba(255,255,255,.045);color:var(--text);border-radius:11px;padding:9px 10px;outline:none}.search-help{margin-top:6px;font-size:9px;line-height:1.35;color:var(--muted)}.search-help b{color:#dce8f6}.btn{border:1px solid var(--border);background:rgba(255,255,255,.055);color:var(--text);border-radius:11px;padding:8px 10px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.1)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}.stat{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:11px;padding:9px}.stat b{display:block;font-size:17px}.stat span{font-size:9.5px;color:var(--muted)}
 .note{font-size:10px;color:var(--muted);line-height:1.45}.note b{color:#dce8f6}
-.controls{position:absolute;z-index:1000;right:14px;bottom:28px;display:flex;flex-direction:column;gap:8px}.controls .btn{width:43px;height:43px;font-size:17px;padding:0}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.controls{position:absolute;z-index:1000;right:14px;bottom:28px;display:flex;flex-direction:column;gap:8px}.controls .btn{width:43px;height:43px;font-size:17px;padding:0}.controls .btn.active{background:rgba(77,168,255,.24);border-color:rgba(77,168,255,.75);box-shadow:0 0 0 2px rgba(77,168,255,.12)}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 .vicon{background:transparent!important;border:0!important;overflow:visible!important}
 .veh-wrap{
   --c:#49a8ff;--fg:#fff;
@@ -123,6 +123,7 @@
 .delay-ok{color:var(--ok);font-weight:900}
 .delay-late{color:#ffb45a;font-weight:900}
 .detail-loading{font-size:11px;color:var(--muted);padding:12px 0}
+.journey-summary{display:grid;grid-template-columns:78px 1fr;gap:4px 7px;margin-top:9px;font-size:10px}.journey-legs{margin-top:9px;border-top:1px solid var(--border);padding-top:6px;max-height:210px;overflow:auto;overscroll-behavior:contain}.journey-leg{display:grid;grid-template-columns:24px 1fr auto;gap:7px;align-items:start;padding:5px 0;font-size:10px}.journey-badge{width:23px;height:23px;display:grid;place-items:center;border-radius:7px;background:rgba(255,255,255,.08);font-size:10px;font-weight:900}.journey-leg-title{font-weight:800}.journey-leg-sub{font-size:9px;color:var(--muted);margin-top:1px}.journey-leg-time{font-size:9px;color:var(--muted);white-space:nowrap;text-align:right}
 @media(max-width:850px){
   .detail-panel{left:auto;right:8px;top:72px;width:min(320px,calc(100% - 16px));max-height:42vh}
 }
@@ -186,7 +187,7 @@
 </div>
 
 <div class="side">
-  <div class="panel glass"><div class="search"><input id="q" placeholder="Linie suchen, z. B. U8, M41, S7"><button id="search" class="btn">⌕</button></div></div>
+  <div class="panel glass"><div class="search"><input id="q" placeholder="Linie oder Start → Ziel"><button id="search" class="btn">⌕</button></div><div class="search-help"><b>Linie:</b> M41 &nbsp;·&nbsp; <b>Route:</b> Invalidenstr. 116 → Alexanderplatz 1</div></div>
   <div class="panel glass"><h2>Verkehrsmittel</h2><div id="filters" class="filters"></div></div>
   <div class="panel glass secondary"><h2>Status</h2><div class="stats"><div class="stat"><b id="visible">0</b><span>sichtbar</span></div><div class="stat"><b id="requests">0/4</b><span>Berlin-Kacheln</span></div></div></div>
   <div class="panel glass secondary"><div class="note"><b>Optimiert:</b> Alle Berlin-Fahrzeuge werden geladen; auf dem Handy werden nur Fahrzeuge im sichtbaren Ausschnitt gerendert. Beim Herauszoomen erscheinen leichte Punkte statt hunderter HTML-Icons.</div></div>
@@ -204,7 +205,7 @@
   <div id="detailBody"></div>
 </aside>
 
-<div class="controls"><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="home" class="btn" title="Berlin">⌂</button></div>
+<div class="controls"><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
 <div id="warn" class="warn"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -247,13 +248,23 @@ map.createPane("tripStopPane");
 map.getPane("tripStopPane").style.zIndex="640";
 map.getPane("tripStopPane").style.pointerEvents="auto";
 
+map.createPane("plannerHaloPane");
+map.getPane("plannerHaloPane").style.zIndex="650";
+map.getPane("plannerHaloPane").style.pointerEvents="none";
+map.createPane("plannerPane");
+map.getPane("plannerPane").style.zIndex="660";
+map.getPane("plannerPane").style.pointerEvents="none";
+map.createPane("plannerStopPane");
+map.getPane("plannerStopPane").style.zIndex="680";
+map.getPane("plannerStopPane").style.pointerEvents="none";
+
 // Vehicle pane is deliberately above routes/stops so a selected trip can never block
 // clicking the next vehicle. This keeps stop tooltips intact and avoids a full-pane click shield.
 map.createPane("vehiclePane");
 map.getPane("vehiclePane").style.zIndex="700";
 map.getPane("vehiclePane").style.pointerEvents="auto";
 
-const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,routeLayer:null,stopLayer:null,renderMode:null,tripController:null,selectionSeq:0};
+const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,tripLayers:new Map(),renderMode:null,tripController:null,selectionSeq:0,focusSelected:false,plannerLayer:null,plannerStopLayer:null,plannerController:null,plannerSeq:0};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 
@@ -395,8 +406,53 @@ function delayText(seconds){
 }
 
 function clearTripLayers(){
-  if(state.routeLayer){map.removeLayer(state.routeLayer);state.routeLayer=null}
-  if(state.stopLayer){map.removeLayer(state.stopLayer);state.stopLayer=null}
+  for(const item of state.tripLayers.values()){
+    if(item.routeLayer&&map.hasLayer(item.routeLayer))map.removeLayer(item.routeLayer);
+    if(item.stopLayer&&map.hasLayer(item.stopLayer))map.removeLayer(item.stopLayer);
+  }
+  state.tripLayers.clear();
+}
+
+function selectedTripBounds(){
+  const bounds=L.latLngBounds([]);
+  for(const item of state.tripLayers.values()){
+    if(item.bounds&&item.bounds.isValid())bounds.extend(item.bounds);
+  }
+  return bounds;
+}
+
+function vehicleTripKey(d){
+  return String(d?.raw?.tripId||d?.raw?.journeyId||d?.raw?.trip?.id||d?.id||"");
+}
+
+function isSelectedVehicle(d){
+  return state.selected===d.id || state.tripLayers.has(vehicleTripKey(d));
+}
+
+function updateFocusButton(){
+  const btn=$("focusRoutes");
+  if(!btn)return;
+  btn.classList.toggle("active",state.focusSelected);
+  btn.setAttribute("aria-pressed",String(state.focusSelected));
+  btn.title=state.focusSelected
+    ? "Alle Fahrzeuge wieder einblenden"
+    : "Nur ausgewählte Linien anzeigen";
+}
+
+function setSelectedFocus(on,{silent=false}={}){
+  if(on&&state.tripLayers.size===0){
+    if(!silent)warn("Wähle zuerst mindestens eine Linie aus. Danach kannst du mit 🎯 alle anderen Fahrzeuge ausblenden.");
+    return false;
+  }
+  state.focusSelected=Boolean(on);
+  updateFocusButton();
+  renderVehicles();
+  if(!silent){
+    warn(state.focusSelected
+      ? `Fokus aktiv: ${state.tripLayers.size} ausgewählte ${state.tripLayers.size===1?"Linie":"Linien"} bleiben sichtbar.`
+      : "Fokus beendet: Alle Fahrzeuge werden wieder angezeigt.");
+  }
+  return true;
 }
 
 function cancelTripRequest(){
@@ -410,9 +466,21 @@ function cancelTripRequest(){
 function closeTripDetails(){
   cancelTripRequest();
   state.selected=null;
-  clearTripLayers();
   $("detailPanel").classList.remove("show");
   document.body.classList.remove("detail-open");
+}
+
+function clearAllTripSelections(){
+  cancelTripRequest();
+  state.selected=null;
+  clearTripLayers();
+  clearPlannerRoute();
+  state.focusSelected=false;
+  updateFocusButton();
+  renderVehicles();
+  $("detailPanel").classList.remove("show");
+  document.body.classList.remove("detail-open");
+  warn("Alle ausgewählten Linien wurden entfernt.");
 }
 
 function stopLocation(stopover){
@@ -440,14 +508,196 @@ function flattenPolyline(poly){
   return out.filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
 }
 
+
+function cancelPlannerRequest(){
+  state.plannerSeq++;
+  if(state.plannerController){
+    try{state.plannerController.abort()}catch(_){}
+    state.plannerController=null;
+  }
+}
+
+function clearPlannerRoute(){
+  cancelPlannerRequest();
+  if(state.plannerLayer&&map.hasLayer(state.plannerLayer))map.removeLayer(state.plannerLayer);
+  if(state.plannerStopLayer&&map.hasLayer(state.plannerStopLayer))map.removeLayer(state.plannerStopLayer);
+  state.plannerLayer=null;
+  state.plannerStopLayer=null;
+}
+
+function parseRouteQuery(value){
+  const raw=String(value||"").trim();
+  if(!raw)return null;
+  let m=raw.match(/^von\s+(.+?)\s+nach\s+(.+)$/i);
+  if(m)return {from:m[1].trim(),to:m[2].trim()};
+  m=raw.match(/^(.+?)\s+(?:nach)\s+(.+)$/i);
+  if(m&&(/\d/.test(m[1])||/\d/.test(m[2])))return {from:m[1].trim(),to:m[2].trim()};
+  const parts=raw.split(/\s*(?:->|→|➜|⟶)\s*/);
+  if(parts.length===2&&parts[0].trim()&&parts[1].trim())return {from:parts[0].trim(),to:parts[1].trim()};
+  return null;
+}
+
+function locPoint(obj){
+  const p=obj?.location||obj;
+  const lat=Number(p?.latitude),lon=Number(p?.longitude);
+  return Number.isFinite(lat)&&Number.isFinite(lon)?[lat,lon]:null;
+}
+
+function locLabel(obj){
+  return obj?.address||obj?.location?.address||obj?.name||"Ort";
+}
+
+function legMode(leg){
+  if(leg?.walking||(!leg?.line&&leg?.mode==="walking"))return "walk";
+  const p=leg?.line?.product||leg?.product||"";
+  if(modes[p])return p;
+  const n=String(leg?.line?.name||"").toUpperCase();
+  if(/^S\d/.test(n))return "suburban";
+  if(/^U\d/.test(n))return "subway";
+  if(/^(RE|RB|FEX|IRE|IC|EC)/.test(n))return "regional";
+  if(/^F\d/.test(n))return "ferry";
+  if(/^(M1|M2|M4|M5|M6|M8|M10|M13|M17|12|16|18|21|27|37|50|60|61|62|63|67|68)$/.test(n))return "tram";
+  if(leg?.line?.product==="bus"||/^(M\d{2,3}|N\d{1,3}|X\d{1,3}|\d{2,3})$/.test(n))return "bus";
+  return "walk";
+}
+
+function legCoords(leg){
+  let coords=flattenPolyline(leg?.polyline);
+  if(coords.length>=2)return coords;
+  const stops=Array.isArray(leg?.stopovers)?leg.stopovers:[];
+  coords=stops.map(s=>locPoint(s?.stop||s)).filter(Boolean);
+  if(coords.length>=2)return coords;
+  const a=locPoint(leg?.origin),b=locPoint(leg?.destination);
+  return a&&b?[a,b]:[];
+}
+
+function minutesBetween(a,b){
+  const x=new Date(a||0).getTime(),y=new Date(b||0).getTime();
+  return Number.isFinite(x)&&Number.isFinite(y)&&y>=x?Math.round((y-x)/60000):null;
+}
+
+function journeyBadge(leg){
+  if(leg?.walking||!leg?.line)return "🚶";
+  const mode=legMode(leg);
+  return modes[mode]?.icon||String(leg?.line?.name||"•").slice(0,3);
+}
+
+function journeyLegHtml(leg){
+  const walking=leg?.walking||!leg?.line;
+  const dep=leg?.departure||leg?.plannedDeparture;
+  const arr=leg?.arrival||leg?.plannedArrival;
+  const dur=minutesBetween(dep,arr);
+  const from=locLabel(leg?.origin),to=locLabel(leg?.destination);
+  const line=leg?.line?.name||"";
+  const title=walking?`Zu Fuß${dur!==null?` · ${dur} min`:""}`:`${esc(line)}${leg?.direction?` → ${esc(leg.direction)}`:""}`;
+  const sub=`${esc(from)} → ${esc(to)}${leg?.cancelled?' · <span class="delay-late">fällt aus</span>':""}`;
+  return `<div class="journey-leg"><span class="journey-badge">${journeyBadge(leg)}</span><div><div class="journey-leg-title">${title}</div><div class="journey-leg-sub">${sub}</div></div><div class="journey-leg-time">${fmtTime(dep)}<br>${fmtTime(arr)}</div></div>`;
+}
+
+function renderPlannedJourney(data,fromText,toText,seq,controller){
+  if(state.plannerSeq!==seq||controller.signal.aborted)return;
+  const journey=data?.journey;
+  const legs=Array.isArray(journey?.legs)?journey.legs:[];
+  if(!legs.length)throw new Error("Keine nutzbare Verbindung erhalten.");
+
+  const routeLayers=[];
+  const stopLayers=[];
+  const bounds=L.latLngBounds([]);
+
+  legs.forEach((leg,index)=>{
+    const coords=legCoords(leg);
+    if(coords.length>1){
+      coords.forEach(p=>bounds.extend(p));
+      const walking=leg?.walking||!leg?.line;
+      const mode=legMode(leg);
+      const routeColor=walking?"#c4ceda":(modes[mode]?.c||"#4da8ff");
+      routeLayers.push(L.polyline(coords,{pane:"plannerHaloPane",color:"#061018",weight:walking?7:10,opacity:.8,lineCap:"round",lineJoin:"round",interactive:false}));
+      routeLayers.push(L.polyline(coords,{pane:"plannerPane",color:routeColor,weight:walking?3:6,opacity:1,dashArray:walking?"7 7":null,lineCap:"round",lineJoin:"round",interactive:false}));
+    }
+    const p=index===0?locPoint(leg?.origin):locPoint(leg?.destination);
+    if(p){
+      bounds.extend(p);
+      stopLayers.push(L.circleMarker(p,{pane:"plannerStopPane",radius:index===0?7:4,color:"#fff",weight:2,fillColor:index===0?"#42dc93":"#4da8ff",fillOpacity:1,interactive:false}));
+    }
+    const end=locPoint(leg?.destination);
+    if(end&&index===legs.length-1){
+      bounds.extend(end);
+      stopLayers.push(L.circleMarker(end,{pane:"plannerStopPane",radius:7,color:"#fff",weight:2,fillColor:"#ff6c75",fillOpacity:1,interactive:false}));
+    }
+  });
+
+  state.plannerLayer=L.layerGroup(routeLayers).addTo(map);
+  state.plannerStopLayer=L.layerGroup(stopLayers).addTo(map);
+
+  const first=legs[0],last=legs[legs.length-1];
+  const dep=first?.departure||first?.plannedDeparture;
+  const arr=last?.arrival||last?.plannedArrival;
+  const duration=minutesBetween(dep,arr);
+  const transitLegs=legs.filter(l=>l?.line&&!l?.walking).length;
+  const transfers=Math.max(0,transitLegs-1);
+  const fromLabel=locLabel(data?.from)||fromText;
+  const toLabel=locLabel(data?.to)||toText;
+
+  $("detailTitle").textContent="Beste Verbindung";
+  $("detailSub").textContent=`${fromLabel} → ${toLabel}`;
+  $("detailBody").innerHTML=`
+    <div class="journey-summary">
+      <div class="detail-key">Abfahrt</div><div>${fmtTime(dep)}</div>
+      <div class="detail-key">Ankunft</div><div>${fmtTime(arr)}</div>
+      <div class="detail-key">Dauer</div><div>${duration!==null?duration+" min":"—"}</div>
+      <div class="detail-key">Umstiege</div><div>${transfers}</div>
+    </div>
+    <div class="route-chip" style="--route-color:#4da8ff"><span class="route-line-sample"></span><span>Beste Strecke auf der Karte markiert</span></div>
+    <div class="journey-legs">${legs.map(journeyLegHtml).join("")}</div>`;
+
+  if(bounds.isValid())map.fitBounds(bounds.pad(.08),{maxZoom:15,paddingTopLeft:[20,70],paddingBottomRight:[20,window.innerWidth<=700?205:20],animate:true,duration:.45});
+}
+
+async function planJourney(from,to){
+  if(state.selected||state.tripController)closeTripDetails();
+  if(state.focusSelected){state.focusSelected=false;updateFocusButton();}
+  state.query="";
+  apply();
+  clearPlannerRoute();
+
+  $("detailPanel").classList.add("show");
+  document.body.classList.add("detail-open");
+  $("detailTitle").textContent="Route wird berechnet …";
+  $("detailSub").textContent=`${from} → ${to}`;
+  $("detailBody").innerHTML='<div class="detail-loading">Adresse wird gesucht und beste ÖPNV-Verbindung berechnet …</div>';
+
+  const controller=new AbortController();
+  state.plannerController=controller;
+  const seq=state.plannerSeq;
+  try{
+    const r=await fetch(`/api/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,{cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal});
+    const text=await r.text();
+    if(controller.signal.aborted||state.plannerSeq!==seq)return;
+    if(!r.ok){
+      let msg=text.slice(0,180);
+      try{msg=JSON.parse(text)?.error||msg}catch(_){}
+      throw new Error(msg||`HTTP ${r.status}`);
+    }
+    const data=JSON.parse(text);
+    renderPlannedJourney(data,from,to,seq,controller);
+  }catch(e){
+    if(e?.name==="AbortError"||controller.signal.aborted||state.plannerSeq!==seq)return;
+    console.error("Routenplanung:",e);
+    $("detailTitle").textContent="Route nicht gefunden";
+    $("detailBody").innerHTML=`<div class="note">${esc(e.message)}<br><br>Tipp: Straße und Hausnummer möglichst vollständig eingeben, z. B. <b>Invalidenstraße 116 → Alexanderplatz 1</b>.</div>`;
+  }finally{
+    if(state.plannerController===controller)state.plannerController=null;
+  }
+}
+
 async function loadTripDetails(d){
   const tripId=d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id;
 
-  // A new vehicle selection always replaces the previous one immediately.
+  // A new vehicle becomes the active detail view, while previously loaded routes stay on the map.
   cancelTripRequest();
-  clearTripLayers();
   state.selected=d.id;
   const selectionSeq=state.selectionSeq;
+  const tripKey=String(tripId||d.id);
 
   $("detailPanel").classList.add("show");
   document.body.classList.add("detail-open");
@@ -546,62 +796,69 @@ async function loadTripDetails(d){
     }
 
     if(!isCurrent())return;
-    if(coords.length>1){
-      const routeColor=modes[d.mode]?.c||"#4da8ff";
-
-      const halo=L.polyline(coords,{
-        pane:"routeHaloPane",
-        color:"#061018",
-        weight:window.innerWidth<=700?10:9,
-        opacity:.78,
-        lineCap:"round",
-        lineJoin:"round",
-        interactive:false
-      });
-
-      const mainLine=L.polyline(coords,{
-        pane:"routePane",
-        color:routeColor,
-        weight:window.innerWidth<=700?6:5,
-        opacity:1,
-        lineCap:"round",
-        lineJoin:"round",
-        interactive:false
-      });
-
-      state.routeLayer=L.layerGroup([halo,mainLine]).addTo(map);
-    }
-
-    if(allStopEntries.length&&isCurrent()){
-      const stopMarkers=allStopEntries.map(({s,p,index})=>{
-        const isNext=index===nextIndex;
-        const isPast=index<nextIndex;
-        const marker=L.circleMarker(p,{
-          pane:"tripStopPane",
-          radius:isNext?(window.innerWidth<=700?7:6):(window.innerWidth<=700?4:(map.getZoom()<=11?2.5:3.5)),
-          color:isNext?"#ffffff":(modes[d.mode]?.c||"#4da8ff"),
-          weight:isNext?3:2,
-          fillColor:isNext?(modes[d.mode]?.c||"#4da8ff"):"#101722",
-          fillOpacity:isPast?0.6:1,
-          opacity:isPast?0.7:1
-        });
-        marker.bindTooltip(
-          `${esc(s?.stop?.name||s?.name||"Haltestelle")} · ${fmtTime(s?.departure||s?.arrival)}`,
-          {direction:"top",offset:[0,-4]}
-        );
-        return marker;
-      });
-      state.stopLayer=L.layerGroup(stopMarkers).addTo(map);
-    }
-
-    if(!isCurrent())return;
     const routeBounds=L.latLngBounds([
       ...coords,
       ...allStopEntries.map(x=>x.p)
     ]);
-    if(routeBounds.isValid()){
-      // Keep the bottom sheet visible while showing the route.
-      map.fitBounds(routeBounds.pad(.06),{
+
+    // Add this trip only once. Previously selected trips remain visible.
+    if(!state.tripLayers.has(tripKey)){
+      let routeLayer=null;
+      let stopLayer=null;
+
+      if(coords.length>1){
+        const routeColor=modes[d.mode]?.c||"#4da8ff";
+
+        const halo=L.polyline(coords,{
+          pane:"routeHaloPane",
+          color:"#061018",
+          weight:window.innerWidth<=700?10:9,
+          opacity:.78,
+          lineCap:"round",
+          lineJoin:"round",
+          interactive:false
+        });
+
+        const mainLine=L.polyline(coords,{
+          pane:"routePane",
+          color:routeColor,
+          weight:window.innerWidth<=700?6:5,
+          opacity:1,
+          lineCap:"round",
+          lineJoin:"round",
+          interactive:false
+        });
+
+        routeLayer=L.layerGroup([halo,mainLine]).addTo(map);
+      }
+
+      if(allStopEntries.length){
+        const stopMarkers=allStopEntries.map(({s,p,index})=>{
+          const isNext=index===nextIndex;
+          const isPast=index<nextIndex;
+          const marker=L.circleMarker(p,{
+            pane:"tripStopPane",
+            radius:isNext?(window.innerWidth<=700?7:6):(window.innerWidth<=700?4:(map.getZoom()<=11?2.5:3.5)),
+            color:isNext?"#ffffff":(modes[d.mode]?.c||"#4da8ff"),
+            weight:isNext?3:2,
+            fillColor:isNext?(modes[d.mode]?.c||"#4da8ff"):"#101722",
+            fillOpacity:isPast?0.6:1,
+            opacity:isPast?0.7:1,
+            interactive:false
+          });
+          return marker;
+        });
+        stopLayer=L.layerGroup(stopMarkers).addTo(map);
+      }
+
+      state.tripLayers.set(tripKey,{routeLayer,stopLayer,bounds:routeBounds,line:d.line,mode:d.mode});
+    }
+
+    if(!isCurrent())return;
+    const allBounds=selectedTripBounds();
+    if(allBounds.isValid()){
+      // Keep every selected route visible together.
+      map.fitBounds(allBounds.pad(.06),{
         maxZoom:14,
         paddingTopLeft:[20,70],
         paddingBottomRight:[20,window.innerWidth<=700?205:20],
@@ -612,9 +869,11 @@ async function loadTripDetails(d){
 
     const routeChip=$("detailBody").querySelector(".route-chip span:last-child");
     if(routeChip&&isCurrent()){
-      routeChip.textContent=routeSource==="original"
+      const count=state.tripLayers.size;
+      const base=routeSource==="original"
         ?"Linienverlauf + Haltestellen auf der Karte"
         :"Vereinfachter Verlauf über Haltestellen";
+      routeChip.textContent=`${base} · ${count} ${count===1?"Linie":"Linien"} ausgewählt`;
     }
   }catch(e){
     if(e?.name==="AbortError"||!isCurrent())return;
@@ -698,6 +957,7 @@ function renderVehicles(){
   for(const [id,d] of state.vehicles){
     if(!state.enabled.has(d.mode))continue;
     if(state.query&&!d.search.includes(state.query))continue;
+    if(state.focusSelected&&!isSelectedVehicle(d))continue;
     if(!vehicleVisibleInView(d,bounds))continue;
 
     wanted.add(id);
@@ -855,16 +1115,28 @@ async function refresh(){
 }
 
 function doSearch(){
-  // A new search is a new navigation action: stop the old trip request and route first.
-  if(state.selected||state.tripController||state.routeLayer||state.stopLayer)closeTripDetails();
-  state.query=$("q").value.trim().toLowerCase();
+  const raw=$("q").value.trim();
+  const route=parseRouteQuery(raw);
+  if(route){
+    planJourney(route.from,route.to);
+    return;
+  }
+
+  // Normal line search. A previously planned A→B route is removed, manually selected lines stay.
+  clearPlannerRoute();
+  if(state.selected||state.tripController)closeTripDetails();
+  if(state.focusSelected){
+    state.focusSelected=false;
+    updateFocusButton();
+  }
+  state.query=raw.toLowerCase();
   apply();
   const a=[...state.vehicles.values()].filter(d=>state.enabled.has(d.mode)&&(!state.query||d.search.includes(state.query)));
   if(state.query&&a.length){
     const b=L.latLngBounds(a.map(d=>[d.lat,d.lon]));
     if(b.isValid())map.fitBounds(b.pad(.2),{maxZoom:15});
   }
-  else if(state.query&&!a.length)warn("Keine passende Linie im aktuellen Radar gefunden.");
+  else if(state.query&&!a.length)warn("Keine passende Linie gefunden. Für eine Route: Startadresse → Zieladresse eingeben.");
 }
 
 function locateMe(){
@@ -886,9 +1158,12 @@ function locateMe(){
 }
 
 buildFilters();
+updateFocusButton();
 $("detailClose").addEventListener("click",closeTripDetails);
 $("refresh").addEventListener("click",refresh);
 $("gps").addEventListener("click",locateMe);
+$("focusRoutes").addEventListener("click",()=>setSelectedFocus(!state.focusSelected));
+$("clearRoutes").addEventListener("click",clearAllTripSelections);
 $("home").addEventListener("click",()=>map.setView(CENTER,11));
 $("search").addEventListener("click",doSearch);
 $("q").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch()});
