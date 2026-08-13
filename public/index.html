@@ -219,8 +219,6 @@ body.map-bright .veh-arrow{
     <button class="map-style-option" type="button" data-map-style="satellite" role="menuitem"><span class="map-style-icon">🛰️</span><span><span class="map-style-name">Satellit</span><span class="map-style-sub">Luft- und Satellitenbilder</span></span></button>
     <button class="map-style-option" type="button" data-map-style="dark" role="menuitem"><span class="map-style-icon">🌙</span><span><span class="map-style-name">Dark</span><span class="map-style-sub">Dunkel mit Beschriftungen</span></span></button>
     <button class="map-style-option" type="button" data-map-style="standard" role="menuitem"><span class="map-style-icon">🗺️</span><span><span class="map-style-name">Standard</span><span class="map-style-sub">Klassische Straßenkarte</span></span></button>
-    <button class="map-style-option" type="button" data-map-style="light" role="menuitem"><span class="map-style-icon">☀️</span><span><span class="map-style-name">Hell</span><span class="map-style-sub">Helle, klare Darstellung</span></span></button>
-    <button class="map-style-option" type="button" data-map-style="voyager" role="menuitem"><span class="map-style-icon">🧭</span><span><span class="map-style-name">Voyager</span><span class="map-style-sub">Farbig und detailreich</span></span></button>
   </div>
 </div>
 <div class="controls"><button id="mapStyleToggle" class="btn" type="button" title="Kartenansicht ändern" aria-expanded="false">🗺️</button><button id="refresh" class="btn" title="Aktualisieren">↻</button><button id="gps" class="btn" title="Mein Standort">◎</button><button id="focusRoutes" class="btn" type="button" title="Nur ausgewählte Linien anzeigen" aria-pressed="false">🎯</button><button id="clearRoutes" class="btn" title="Alle ausgewählten Linien löschen">🗑</button><button id="home" class="btn" title="Berlin">⌂</button></div>
@@ -252,8 +250,6 @@ const modes = {
 const MAP_STYLES={
   dark:{name:"Dark",bright:false,url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
   standard:{name:"Standard",bright:true,url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
-  light:{name:"Hell",bright:true,url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
-  voyager:{name:"Voyager",bright:true,url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
   satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"}}
 };
 
