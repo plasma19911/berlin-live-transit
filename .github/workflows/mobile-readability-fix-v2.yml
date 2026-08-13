@@ -1,0 +1,55 @@
+name: Apply mobile readability fix v2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mobile-readability-fix-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Improve mobile controls and attribution
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old_map = 'const map = L.map("map",{zoomControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);'
+          new_map = 'const map = L.map("map",{zoomControl:false,attributionControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);'
+          if old_map in s:
+              s = s.replace(old_map, new_map, 1)
+
+          zoom_line = 'L.control.zoom({position:"topright"}).addTo(map);'
+          attribution_line = 'L.control.attribution({position:"bottomleft",prefix:false}).addTo(map);'
+          if attribution_line not in s:
+              if zoom_line not in s:
+                  raise SystemExit('zoom control marker not found')
+              s = s.replace(zoom_line, zoom_line + '\n' + attribution_line, 1)
+
+          marker = '/* mobile-readability-fix */'
+          css_b64 = 'LyogbW9iaWxlLXJlYWRhYmlsaXR5LWZpeCAqLwouY29udHJvbHN7CiAgcGFkZGluZzo2cHg7CiAgYmFja2dyb3VuZDpyZ2JhKDYsMTEsMTgsLjgyKTsKICBib3JkZXI6MXB4IHNvbGlkIHJnYmEoMjU1LDI1NSwyNTUsLjE2KTsKICBib3JkZXItcmFkaXVzOjE3cHg7CiAgYm94LXNoYWRvdzowIDhweCAyOHB4IHJnYmEoMCwwLDAsLjQ4KTsKICBiYWNrZHJvcC1maWx0ZXI6Ymx1cigxMnB4KTsKICAtd2Via2l0LWJhY2tkcm9wLWZpbHRlcjpibHVyKDEycHgpOwp9Ci5jb250cm9scyAuYnRuewogIGJhY2tncm91bmQ6cmdiYSgxMywyMCwzMCwuODApOwogIGJvcmRlci1jb2xvcjpyZ2JhKDI1NSwyNTUsMjU1LC4xOCk7CiAgYm94LXNoYWRvdzowIDJweCA4cHggcmdiYSgwLDAsMCwuMzApOwp9Ci5jb250cm9scyAuYnRuOmhvdmVye2JhY2tncm91bmQ6cmdiYSgyNSwzNSw0OSwuOTIpfQoubGVhZmxldC1jb250cm9sLWF0dHJpYnV0aW9uewogIGJhY2tncm91bmQ6cmdiYSg1LDEwLDE2LC43OCkhaW1wb3J0YW50OwogIGNvbG9yOnJnYmEoMjM1LDI0MywyNTUsLjcyKSFpbXBvcnRhbnQ7CiAgYm9yZGVyOjFweCBzb2xpZCByZ2JhKDI1NSwyNTUsMjU1LC4xMCkhaW1wb3J0YW50OwogIGJvcmRlci1yYWRpdXM6N3B4IWltcG9ydGFudDsKICBwYWRkaW5nOjJweCA1cHghaW1wb3J0YW50OwogIG1hcmdpbi1sZWZ0OjhweCFpbXBvcnRhbnQ7CiAgbWFyZ2luLWJvdHRvbTo4cHghaW1wb3J0YW50OwogIGZvbnQtc2l6ZTo3cHghaW1wb3J0YW50OwogIGxpbmUtaGVpZ2h0OjEuMTUhaW1wb3J0YW50OwogIG1heC13aWR0aDptaW4oNzJ2dyw1MjBweCkhaW1wb3J0YW50OwogIGJveC1zaGFkb3c6MCAzcHggMTJweCByZ2JhKDAsMCwwLC4yOCkhaW1wb3J0YW50Owp9Ci5sZWFmbGV0LWNvbnRyb2wtYXR0cmlidXRpb24gYXtjb2xvcjpyZ2JhKDIyMCwyMzcsMjU1LC44NikhaW1wb3J0YW50fQpAbWVkaWEobWF4LXdpZHRoOjcwMHB4KXsKICAuc2lkZXtib3R0b206Y2FsYygxMHB4ICsgZW52KHNhZmUtYXJlYS1pbnNldC1ib3R0b20pKX0KICAudHJhbnNwb3J0LXBhbmVsewogICAgYmFja2dyb3VuZDpyZ2JhKDcsMTIsMTksLjk0KSFpbXBvcnRhbnQ7CiAgICBib3JkZXItY29sb3I6cmdiYSgyNTUsMjU1LDI1NSwuMTYpIWltcG9ydGFudDsKICAgIGJveC1zaGFkb3c6MCA4cHggMjZweCByZ2JhKDAsMCwwLC40NCkhaW1wb3J0YW50OwogIH0KICAudHJhbnNwb3J0LWhlYWR7bWluLWhlaWdodDozNHB4O2FsaWduLWl0ZW1zOmNlbnRlcn0KICAudHJhbnNwb3J0LWhlYWQgaDJ7CiAgICBtYXJnaW46MCFpbXBvcnRhbnQ7CiAgICBjb2xvcjojZjRmOGZmIWltcG9ydGFudDsKICAgIGZvbnQtc2l6ZToxMnB4IWltcG9ydGFudDsKICAgIGxldHRlci1zcGFjaW5nOi4wN2VtIWltcG9ydGFudDsKICB9CiAgLnRyYW5zcG9ydC1oZWFkIGgyOjpiZWZvcmV7Y29udGVudDoi4piwICI7Y29sb3I6IzllZDFmZn0KICAuZmlsdGVyLXRvZ2dsZXsKICAgIGRpc3BsYXk6Z3JpZCFpbXBvcnRhbnQ7CiAgICBwbGFjZS1pdGVtczpjZW50ZXI7CiAgICBiYWNrZ3JvdW5kOnJnYmEoMjU1LDI1NSwyNTUsLjA4KSFpbXBvcnRhbnQ7CiAgICBib3JkZXItY29sb3I6cmdiYSgyNTUsMjU1LDI1NSwuMTgpIWltcG9ydGFudDsKICAgIGNvbG9yOiNmZmYhaW1wb3J0YW50OwogIH0KICAudHJhbnNwb3J0LXBhbmVsLm1vYmlsZS1jb2xsYXBzZWR7bWluLWhlaWdodDo0NnB4O3BhZGRpbmc6NnB4IDlweCFpbXBvcnRhbnR9CiAgLmNvbnRyb2xzewogICAgcmlnaHQ6OXB4IWltcG9ydGFudDsKICAgIGJvcmRlci1yYWRpdXM6MTZweDsKICAgIGJhY2tncm91bmQ6cmdiYSg0LDksMTUsLjg2KTsKICB9CiAgLmNvbnRyb2xzIC5idG57YmFja2dyb3VuZDpyZ2JhKDExLDE4LDI3LC44Nil9CiAgLmxlYWZsZXQtY29udHJvbC1hdHRyaWJ1dGlvbnsKICAgIG1hcmdpbi1sZWZ0OjlweCFpbXBvcnRhbnQ7CiAgICBtYXJnaW4tYm90dG9tOjEzNnB4IWltcG9ydGFudDsKICAgIG1heC13aWR0aDpjYWxjKDEwMHZ3IC0gMTAwcHgpIWltcG9ydGFudDsKICAgIGZvbnQtc2l6ZTo2LjVweCFpbXBvcnRhbnQ7CiAgICB3aGl0ZS1zcGFjZTpub3JtYWwhaW1wb3J0YW50OwogIH0KICBib2R5Om5vdCguZmlsdGVycy1jb2xsYXBzZWQpIC5sZWFmbGV0LWNvbnRyb2wtYXR0cmlidXRpb257bWFyZ2luLWJvdHRvbToyMDBweCFpbXBvcnRhbnR9Cn0K'
+          if marker not in s:
+              css = base64.b64decode(css_b64).decode('utf-8')
+              if '</style>' not in s:
+                  raise SystemExit('style end marker not found')
+              s = s.replace('</style>', css + '\n</style>', 1)
+
+          p.write_text(s, encoding='utf-8')
+          Path('.github/workflows/mobile-readability-fix-v2.yml').unlink(missing_ok=True)
+          PY
+
+          git config user.name "ChatGPT UI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Improve mobile map controls and attribution"
+          git push
