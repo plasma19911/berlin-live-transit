@@ -78,6 +78,19 @@
     }
     .zoom-far .kind-bus .veh-symbol::before{content:"B"!important;font-size:10px!important}
     .zoom-far .kind-tram .veh-symbol::before{content:"T"!important;font-size:10px!important}
+    @media(max-width:700px){
+      .detail-panel{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;height:min(48vh,420px)!important;min-height:300px!important;max-height:min(48vh,420px)!important;overflow:hidden!important;border-radius:15px!important;padding:9px 10px!important}
+      .detail-panel.show{display:flex!important;flex-direction:column!important}
+      .detail-head{flex:0 0 auto!important;min-height:38px!important}
+      #detailBody{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:3px!important;padding-bottom:10px!important}
+      .detail-grid{margin-top:6px!important;font-size:10px!important;grid-template-columns:86px 1fr!important;gap:4px 7px!important}
+      .route-chip{white-space:normal!important;line-height:1.3!important;margin-top:7px!important}
+      .detail-section{height:auto!important;max-height:none!important;overflow:visible!important;margin-top:8px!important;padding-top:7px!important}
+      .detail-section h3{position:sticky!important;top:0!important;z-index:3!important;padding:5px 0!important;background:rgba(12,18,28,.98)!important;font-size:10px!important}
+      .route-leg{padding:7px 0!important;font-size:10px!important;line-height:1.3!important;gap:8px!important}
+      .route-leg-badge{min-width:52px!important;font-size:9px!important;padding:4px 5px!important}
+      .route-leg .stop-meta{display:block!important;font-size:8.5px!important;margin-top:2px!important}
+    }
   `;
   const style = document.createElement("style");
   style.id = "berlin-enhancements-css";
@@ -287,7 +300,7 @@
 
   function tripStillReachesLeg(trip, leg) {
     const stops = Array.isArray(trip?.stopovers) ? trip.stopovers : [];
-    if (!stops.length) return false;
+    if (!stops.length) return null;
 
     const boardIndexes = [];
     const alightIndexes = [];
@@ -295,7 +308,7 @@
       if (stopMatches(stops[i], leg.boardId, leg.boardName, leg.boardLat, leg.boardLon)) boardIndexes.push(i);
       if (stopMatches(stops[i], leg.alightId, leg.alightName, leg.alightLat, leg.alightLon)) alightIndexes.push(i);
     }
-    if (!boardIndexes.length || !alightIndexes.length) return false;
+    if (!boardIndexes.length || !alightIndexes.length) return null;
 
     const now = Date.now();
     for (const bi of boardIndexes) {
@@ -303,7 +316,7 @@
       if (ai == null) continue; // wrong direction: destination occurs before boarding stop
       const boardTime = stopTimeMs(stops[bi]);
       // A short grace period keeps a delayed vehicle visible around the boarding stop.
-      if (!Number.isFinite(boardTime) || boardTime >= now - 2 * 60 * 1000) return true;
+      if (!Number.isFinite(boardTime) || boardTime >= now - 5 * 60 * 1000) return true;
     }
     return false;
   }
@@ -326,10 +339,8 @@
       return;
     }
 
-    window.__berlinRouteEligibility = { active: true, ready: false, ids: new Set() };
-    if (map) map.fire("moveend");
-
     const eligible = new Set();
+    const provisional = new Set();
     const jobs = [];
     const now = Date.now();
 
@@ -348,18 +359,28 @@
       });
       if (exact) {
         eligible.add(vehicleId);
+        provisional.add(vehicleId);
         continue;
       }
+
+      const directionFallback = matchingLegs.some(leg => directionLooksCompatible(vehicle, leg));
 
       // Without a trip id we cannot inspect the future stop sequence. Use a conservative
       // same-line + same-direction fallback rather than hiding a potentially useful live bus/train.
       if (!liveTripId) {
-        if (matchingLegs.some(leg => directionLooksCompatible(vehicle, leg))) eligible.add(vehicleId);
+        if (directionFallback) {
+          eligible.add(vehicleId);
+          provisional.add(vehicleId);
+        }
         continue;
       }
 
-      jobs.push({ vehicleId, liveTripId, matchingLegs });
+      if (directionFallback) provisional.add(vehicleId);
+      jobs.push({ vehicleId, liveTripId, matchingLegs, directionFallback });
     }
+
+    window.__berlinRouteEligibility = { active: true, ready: true, ids: provisional };
+    if (map) map.fire("moveend");
 
     // Limit concurrent trip lookups on mobile while still validating every candidate.
     let cursor = 0;
@@ -368,15 +389,25 @@
         const job = jobs[cursor++];
         const trip = await fetchLiveTrip(job.liveTripId);
         if (seq !== routeState.eligibilitySeq) return;
-        if (!trip) continue;
-        if (job.matchingLegs.some(leg => tripStillReachesLeg(trip, leg))) eligible.add(job.vehicleId);
+        if (!trip) {
+          if (job.directionFallback) eligible.add(job.vehicleId);
+          continue;
+        }
+        let confirmed = false;
+        let unknown = false;
+        for (const leg of job.matchingLegs) {
+          const status = tripStillReachesLeg(trip, leg);
+          if (status === true) { confirmed = true; break; }
+          if (status === null) unknown = true;
+        }
+        if (confirmed || (unknown && job.directionFallback)) eligible.add(job.vehicleId);
       }
     });
     await Promise.all(workers);
     if (seq !== routeState.eligibilitySeq) return;
 
     window.__berlinRouteEligibility = { active: true, ready: true, ids: eligible };
-    if (filter.fitVehiclesOnce) filter.fitVehiclesOnce = true;
+    if (eligible.size) filter.fitVehiclesOnce = true;
     if (map) map.fire("moveend");
   }
 
