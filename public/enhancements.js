@@ -60,6 +60,12 @@
     .route-leg:first-child{border-top:0}
     .route-leg-badge{min-width:44px;padding:3px 5px;border-radius:7px;text-align:center;font-size:9px;font-weight:1000;background:var(--leg-color,#65758a);color:var(--leg-fg,#fff);border:1px solid rgba(255,255,255,.75)}
     body.planned-route-focus .veh{box-shadow:0 0 0 2px rgba(255,255,255,.98),0 0 0 5px rgba(5,10,16,.88),0 0 18px rgba(77,168,255,.75)!important}
+    .planned-vehicle-icon{background:transparent!important;border:0!important;overflow:visible!important}
+    .planned-vehicle-card{min-width:72px;padding:5px 7px;border-radius:10px;background:rgba(11,18,27,.94);border:2px dashed rgba(255,255,255,.9);box-shadow:0 3px 12px rgba(0,0,0,.55);color:#fff;text-align:center;font-family:Inter,system-ui,sans-serif;line-height:1.05}
+    .planned-vehicle-card .pv-mode{display:block;font-size:7px;font-weight:1000;letter-spacing:.08em;color:var(--pv-color,#4da8ff)}
+    .planned-vehicle-card .pv-line{display:block;font-size:12px;font-weight:1000;margin-top:2px}
+    .planned-vehicle-card .pv-time{display:block;font-size:8px;font-weight:800;color:#d9e5f2;margin-top:3px}
+    .planned-vehicle-card .pv-count{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:8px;background:rgba(77,168,255,.22);font-size:8px}
     @media(max-width:700px){
       .transport-toggle{display:block}
       .side{gap:6px!important}
@@ -81,13 +87,14 @@
   style.textContent = css;
   document.head.appendChild(style);
 
-  const routeState = { layers: [], controller: null };
+  const routeState = { layers: [], controller: null, plannedVehicleLayer: null };
   const routeFocusState = { active: false, paneDisplays: new Map() };
 
   function ensurePlannerPanes(map) {
     const panes = [
       ["plannerRouteHaloPane", "650"],
       ["plannerRoutePane", "660"],
+      ["plannerVehiclePane", "690"],
       ["plannerStopPane", "820"]
     ];
     for (const [name, z] of panes) {
@@ -185,6 +192,82 @@
     return modeInfo[p] ? p : "regional";
   }
 
+  function normRouteValue(value) {
+    return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+  }
+
+  function normRouteLine(value) {
+    return normRouteValue(value).replace(/^(bus|tram|strassenbahn|sbahn|ubahn|regionalbahn|regionalexpress|express)+/, "");
+  }
+
+  function liveVehicleMatchesLeg(vehicle, leg) {
+    if (!vehicle || !leg) return false;
+    const raw = vehicle.raw || {};
+    const liveTrip = String(raw.tripId || raw.journeyId || raw.trip?.id || "");
+    const plannedTrip = String(leg.tripId || "");
+    if (liveTrip && plannedTrip) return liveTrip === plannedTrip;
+
+    const liveLine = normRouteLine(vehicle.line || raw.line?.name || raw.line?.id);
+    const plannedLine = normRouteLine(leg.line || leg.lineId);
+    if (!liveLine || !plannedLine || liveLine !== plannedLine) return false;
+    if (leg.mode && vehicle.mode && leg.mode !== vehicle.mode) return false;
+
+    const liveDirection = normRouteValue(raw.direction || raw.destination?.name || raw.destination || "");
+    const plannedDirection = normRouteValue(leg.direction || "");
+    return !liveDirection || !plannedDirection || liveDirection.includes(plannedDirection) || plannedDirection.includes(liveDirection);
+  }
+
+  function syncPlannedVehicleMarkers() {
+    const map = window.__berlinLiveMap;
+    if (!map) return;
+    ensurePlannerPanes(map);
+    if (routeState.plannedVehicleLayer && map.hasLayer(routeState.plannedVehicleLayer)) {
+      map.removeLayer(routeState.plannedVehicleLayer);
+    }
+    routeState.plannedVehicleLayer = null;
+
+    const filter = window.__berlinPlannedVehicleFilter;
+    if (!filter?.active || !Array.isArray(filter.legs) || !filter.legs.length) return;
+    const live = [...(window.__berlinLiveState?.vehicles?.values?.() || [])];
+    const groups = new Map();
+
+    for (const leg of filter.legs) {
+      const lat = Number(leg.boardLat), lon = Number(leg.boardLon);
+      if (![lat, lon].every(Number.isFinite)) continue;
+      if (live.some(v => liveVehicleMatchesLeg(v, leg))) continue;
+
+      const dep = new Date(leg.departure || 0);
+      const depMs = dep.getTime();
+      // Old scheduled trips are not useful; keep a short grace period for late realtime updates.
+      if (Number.isFinite(depMs) && depMs < Date.now() - 5 * 60 * 1000) continue;
+
+      const key = [leg.mode || "regional", normRouteLine(leg.line || leg.lineId), lat.toFixed(5), lon.toFixed(5)].join("|");
+      if (!groups.has(key)) groups.set(key, { leg, lat, lon, times: [], trips: [] });
+      const g = groups.get(key);
+      g.times.push(Number.isFinite(depMs) ? fmtTime(dep) : "—");
+      if (leg.tripId) g.trips.push(String(leg.tripId));
+    }
+
+    const markers = [];
+    for (const g of groups.values()) {
+      g.times = [...new Set(g.times)].sort();
+      const leg = g.leg;
+      const info = modeInfo[leg.mode] || modeInfo.regional;
+      const line = String(leg.line || leg.lineId || info.label || "?");
+      const count = g.times.length;
+      const firstTime = g.times[0] || "—";
+      const countHtml = count > 1 ? `<span class="pv-count">×${count}</span>` : "";
+      const html = `<div class="planned-vehicle-card" style="--pv-color:${info.c}"><span class="pv-mode">⏱ GEPLANT · ${esc(info.label)}</span><span class="pv-line">${esc(line)}${countHtml}</span><span class="pv-time">ab ${esc(firstTime)}</span></div>`;
+      const icon = L.divIcon({ className: "planned-vehicle-icon", html, iconSize: [82, 48], iconAnchor: [41, 24] });
+      const marker = L.marker([g.lat, g.lon], { pane: "plannerVehiclePane", icon, keyboard: false, interactive: true });
+      marker.bindTooltip(`<b>GEPLANT · ${esc(info.label)} ${esc(line)}</b><br>Ab Einstieg: ${g.times.map(esc).join(", ")}<br><span style="opacity:.75">Noch keine echte Live-Position im Radar.</span>`, { direction: "top", offset: [0, -20] });
+      markers.push(marker);
+    }
+    if (markers.length) routeState.plannedVehicleLayer = L.layerGroup(markers).addTo(map);
+  }
+
+  window.addEventListener("berlin-live-vehicles-updated", syncPlannedVehicleMarkers);
+
   function clearPlannedRoute() {
     if (routeState.controller) {
       try { routeState.controller.abort(); } catch (_) {}
@@ -192,6 +275,8 @@
     }
     const map = window.__berlinLiveMap;
     if (map) for (const layer of routeState.layers) if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+    if (map && routeState.plannedVehicleLayer && map.hasLayer(routeState.plannedVehicleLayer)) map.removeLayer(routeState.plannedVehicleLayer);
+    routeState.plannedVehicleLayer = null;
     routeState.layers = [];
     window.__berlinPlannedVehicleFilter={active:false,legs:[]};
     setRouteFocus(false);
@@ -326,6 +411,7 @@
         fitVehiclesOnce:true,
         routeBounds:bounds.isValid()?{south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()}:null
       };
+      syncPlannedVehicleMarkers();
       if (bounds.isValid()) map.fitBounds(bounds.pad(.08), { maxZoom: 15, paddingTopLeft: [20,70], paddingBottomRight: [20, innerWidth <= 700 ? 205 : 20] });
       else map.fire("moveend");
 

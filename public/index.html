@@ -357,6 +357,7 @@ map.getPane("vehiclePane").style.zIndex="700";
 map.getPane("vehiclePane").style.pointerEvents="auto";
 
 const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,tripLayers:new Map(),renderMode:null,tripController:null,selectionSeq:0,focusSelected:false};
+window.__berlinLiveState=state;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 
@@ -1179,6 +1180,7 @@ async function refresh(){
     });
     $("total").textContent=usable.toLocaleString("de-DE");
     renderVehicles();
+    window.dispatchEvent(new CustomEvent("berlin-live-vehicles-updated"));
 
     if(usable>0){
       status("ok","LIVE",`${usable} Fahrzeuge · ${serverMeta?serverMeta.tiles_ok+"/"+serverMeta.tiles_total+" Berlin-Kacheln · ":""}${new Date().toLocaleTimeString("de-DE")}`);
