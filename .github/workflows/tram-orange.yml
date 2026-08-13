@@ -1,4 +1,4 @@
-name: Tram orange
+name: SEV and direction arrows
 
 'on':
   push:
@@ -13,15 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Change tram color only
+      - name: Apply UI patch
+        run: python .github/sev_direction_patch.py
+      - name: Validate JavaScript
         run: |
-          python -c "from pathlib import Path; p=Path('public/index.html'); s=p.read_text(encoding='utf-8'); old='tram:{name:\"Tram\",kind:\"tram\",c:\"#f6c900\",fg:\"#111111\",icon:\"TRAM\"}'; new='tram:{name:\"Tram\",kind:\"tram\",c:\"#ff8a00\",fg:\"#111111\",icon:\"TRAM\"}'; assert old in s; p.write_text(s.replace(old,new,1),encoding='utf-8')"
-          python -c "from pathlib import Path; p=Path('public/enhancements.js'); s=p.read_text(encoding='utf-8'); old='tram: { c: \"#f6c900\", fg: \"#111\", label: \"TRAM\" }'; new='tram: { c: \"#ff8a00\", fg: \"#111\", label: \"TRAM\" }'; assert old in s; p.write_text(s.replace(old,new,1),encoding='utf-8')"
-      - name: Commit
+          node --check public/enhancements.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('public/index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',s,re.S|re.I)
+          js=max(blocks,key=len)
+          Path('/tmp/index-inline.js').write_text(js,encoding='utf-8')
+          PY
+          node --check /tmp/index-inline.js
+      - name: Commit patch
         run: |
           git config user.name "ChatGPT UI Patch"
           git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/sev_direction_patch.py
           git add public/index.html public/enhancements.js
           git diff --cached --check
-          git commit -m "Make tram markers orange"
+          git commit -m "Improve direction arrows and add replacement service styling"
           git push
