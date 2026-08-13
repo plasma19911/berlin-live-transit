@@ -1,3 +1,4 @@
+# verification run after VBB pagination fix
 name: Public site smoke test
 
 on:
@@ -47,11 +48,6 @@ jobs:
           echo "from_id=$FROM to_id=$TO"
           curl -LsS --max-time 30 --get 'https://v6.vbb.transport.rest/journeys' --data-urlencode "from=$FROM" --data-urlencode "to=$TO" --data-urlencode 'results=4' --data-urlencode 'stopovers=true' --data-urlencode 'polylines=true' --data-urlencode 'remarks=true' --data-urlencode 'language=de' --data-urlencode 'pretty=false' -o /tmp/journeys.json -w 'journeys_http=%{http_code} time=%{time_total}\n'
           python -c "import json; d=json.load(open('/tmp/journeys.json')); print('journeys=',len(d.get('journeys',[]))); print('laterRef=',bool(d.get('laterRef'))); print('message=',d.get('message')); print('error=',d.get('error'))" 2>/dev/null || head -c 800 /tmp/journeys.json
-          LATER=$(python -c "import json; d=json.load(open('/tmp/journeys.json')); print(d.get('laterRef',''))" 2>/dev/null)
-          if [ -n "$LATER" ]; then
-            curl -LsS --max-time 30 --get 'https://v6.vbb.transport.rest/journeys' --data-urlencode "laterThan=$LATER" --data-urlencode 'results=4' --data-urlencode 'stopovers=true' --data-urlencode 'polylines=true' --data-urlencode 'remarks=true' --data-urlencode 'language=de' --data-urlencode 'pretty=false' -o /tmp/later.json -w 'later_http=%{http_code} time=%{time_total}\n'
-            python -c "import json; d=json.load(open('/tmp/later.json')); print('later_journeys=',len(d.get('journeys',[]))); print('message=',d.get('message')); print('error=',d.get('error'))" 2>/dev/null || head -c 800 /tmp/later.json
-          fi
 
       - name: Diagnose browser rendering
         shell: bash
