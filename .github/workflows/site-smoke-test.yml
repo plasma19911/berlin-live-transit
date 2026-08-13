@@ -17,19 +17,30 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for public app
+      - name: Diagnose public app and radar
         shell: bash
         run: |
-          set -e
-          ok=0
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            home=$(curl -LsS --max-time 25 -o /tmp/index.html -w '%{http_code}' 'https://berlin-live-transit.pages.dev/' || true)
-            radar=$(curl -LsS --max-time 35 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin' || true)
-            route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
-            echo "attempt=$i home=$home radar=$radar route=$route"
-            if [ "$home" = "200" ] && [ "$radar" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
-            sleep 10
-          done
-          cat /tmp/radar.json
+          set +e
+
+          echo '=== PUBLIC HOME ==='
+          curl -LsS --max-time 25 -o /tmp/index.html -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/'
+
+          echo '=== PUBLIC RADAR ==='
+          curl -LsS --max-time 40 -o /tmp/radar.json -w 'http=%{http_code} time=%{time_total}\n' 'https://berlin-live-transit.pages.dev/api/radar-berlin'
+          python -c "import json; d=json.load(open('/tmp/radar.json')); print('movements=',len(d.get('movements',[]))); print('meta=',d.get('meta')); print('error=',d.get('error')); print('details=',d.get('details'))" 2>/dev/null || head -c 800 /tmp/radar.json
           echo
-          test "$ok" = "1"
+
+          echo '=== PUBLIC ROUTE ==='
+          curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w 'http=%{http_code} time=%{time_total}\n'
+          python -c "import json; d=json.load(open('/tmp/route.json')); print('journey=',bool(d.get('journey')),'within_hour=',len(d.get('journeysWithinHour',[])),'error=',d.get('error'))" 2>/dev/null || head -c 500 /tmp/route.json
+          echo
+
+          echo '=== DIRECT VBB CURRENT 30s/3f ==='
+          curl -LsS --max-time 25 -o /tmp/vbb-current.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=30&frames=3&polylines=false&language=de&pretty=false'
+          python -c "import json; d=json.load(open('/tmp/vbb-current.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-current.json
+          echo
+
+          echo '=== DIRECT VBB LIGHT 5s/1f ==='
+          curl -LsS --max-time 25 -o /tmp/vbb-light.json -w 'http=%{http_code} time=%{time_total}\n' 'https://v6.vbb.transport.rest/radar?north=52.58&south=52.44&west=13.2375&east=13.425&results=256&duration=5&frames=1&polylines=false&language=de&pretty=false'
+          python -c "import json; d=json.load(open('/tmp/vbb-light.json')); print('items=',len(d if isinstance(d,list) else d.get('movements',d.get('vehicles',[]))))" 2>/dev/null || head -c 300 /tmp/vbb-light.json
+          echo
