@@ -353,9 +353,9 @@ const modes = {
 };
 
 const MAP_STYLES={
-  dark:{name:"Dark",bright:false,url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}},
-  standard:{name:"Standard",bright:true,url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}},
-  satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"}}
+  dark:{name:"Dark",bright:false,url:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",options:{subdomains:"abcd",maxZoom:20,attribution:'&copy; OpenStreetMap contributors &copy; CARTO · <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous-Datenquellen</a>'}},
+  standard:{name:"Standard",bright:true,url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:'&copy; OpenStreetMap contributors · <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous-Datenquellen</a>'}},
+  satellite:{name:"Satellit",bright:false,url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",options:{maxZoom:19,attribution:'Tiles &copy; Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community · <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous-Datenquellen</a>'}}
 };
 
 const map = L.map("map",{zoomControl:false,attributionControl:false,preferCanvas:true,minZoom:8,maxZoom:19}).setView(CENTER,11);
