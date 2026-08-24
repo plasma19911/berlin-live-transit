@@ -192,7 +192,8 @@ function movementFromTransitous(segment, trip, now) {
     frames: fromLocation && toLocation ? [{ origin: { location: fromLocation }, destination: { location: toLocation } }] : [],
     departure: segment.departure, arrival: segment.arrival,
     plannedDeparture: segment.scheduledDeparture, plannedArrival: segment.scheduledArrival,
-    realtime: Boolean(segment.realTime), source: "transitous"
+    realtime: Boolean(segment.realTime), source: "transitous",
+    positionEstimated: true, positionMethod: "calculated_between_stops"
   };
 }
 
@@ -241,7 +242,15 @@ export async function onRequestGet() {
     }
     tilesOk++;
     upstreamCounts[result.upstream] = (upstreamCounts[result.upstream] || 0) + 1;
-    for (const movement of result.movements) unique.set(movementKey(movement), movement);
+    for (const movement of result.movements) {
+      const enriched = {
+        ...movement,
+        source: movement?.source || "transport.rest",
+        positionEstimated: true,
+        positionMethod: "calculated_between_stops"
+      };
+      unique.set(movementKey(enriched), enriched);
+    }
   }
 
   if (tilesOk === 0) {
@@ -254,6 +263,7 @@ export async function onRequestGet() {
           meta: {
             tiles_ok: 1, tiles_total: 1, vehicles_raw_unique: unique.size, coverage: "Berlin",
             partial: false, fallback: true, elapsed_ms: Date.now() - started,
+            generated_at: new Date().toISOString(), gps: false, position_method: "calculated_between_stops",
             upstreams: { [TRANSITOUS_MAP_URL]: 1 }, errors: errors.slice(0, 4)
           }
         }, {
@@ -277,6 +287,7 @@ export async function onRequestGet() {
     meta: {
       tiles_ok: tilesOk, tiles_total: TILES.length, vehicles_raw_unique: unique.size, coverage: "Berlin",
       partial: tilesOk !== TILES.length, fallback: false, elapsed_ms: Date.now() - started,
+      generated_at: new Date().toISOString(), gps: false, position_method: "calculated_between_stops",
       upstreams: upstreamCounts, errors: errors.slice(0, 4)
     }
   }, {

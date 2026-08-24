@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- selected-trip-live-refresh-v2 -->
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -336,6 +337,7 @@ body.map-bright .veh-arrow{
 const RADAR_BASES = ["/api/radar-berlin"];
 const CENTER = [52.5200, 13.4050];
 const REFRESH_MS = 30000;
+const SELECTED_TRIP_REFRESH_MS = 30000;
 
 const tiles = [
   {north:52.72, south:52.32, west:13.05, east:13.80}
@@ -383,7 +385,7 @@ map.createPane("vehiclePane");
 map.getPane("vehiclePane").style.zIndex="700";
 map.getPane("vehiclePane").style.pointerEvents="auto";
 
-const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,tripLayers:new Map(),renderMode:null,tripController:null,selectionSeq:0,focusSelected:false};
+const state={vehicles:new Map(),markers:new Map(),enabled:new Set(Object.keys(modes)),query:"",busy:false,counts:{},selected:null,selectedTrip:null,lastTripRefreshAt:0,tripLayers:new Map(),renderMode:null,tripController:null,selectionSeq:0,focusSelected:false};
 window.__berlinLiveState=state;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
@@ -553,13 +555,17 @@ function movementBearing(m, old){
 
 function popup(d){
   const m=d.raw, line=m.line||{};
+  const positionText=m.realtime===false
+    ?"Fahrplan-Hochrechnung (kein GPS)"
+    :"Berechnete Live-Prognose (kein GPS)";
   return `<div class="popup">
     <div style="margin-bottom:8px"><b style="font-size:13px">${esc(d.line)}</b> · ${esc(modes[d.mode].name)}</div>
     <div><span class="muted">Ziel:</span> ${esc(m.direction||m.destination?.name||"—")}</div>
     <div><span class="muted">Fahrtrichtung:</span> ${Number.isFinite(d.bearing)?Math.round(d.bearing)+"° · "+(["N","NO","O","SO","S","SW","W","NW"][Math.round(d.bearing/45)%8]):"—"}</div>
     <div><span class="muted">Trip:</span> ${esc(m.tripId||m.journeyId||"—")}</div>
     <div><span class="muted">Produkt:</span> ${esc(line.product||"—")}</div>
-    <div><span class="muted">Position:</span> ${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}</div>
+    <div><span class="muted">Positionsart:</span> ${positionText}</div>
+    <div><span class="muted">Kartenpunkt:</span> ${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}</div>
   </div>`;
 }
 
@@ -640,6 +646,8 @@ function cancelTripRequest(){
 function closeTripDetails(){
   cancelTripRequest();
   state.selected=null;
+  state.selectedTrip=null;
+  state.lastTripRefreshAt=0;
   $("detailPanel").classList.remove("show");
   document.body.classList.remove("detail-open");
 }
@@ -647,6 +655,8 @@ function closeTripDetails(){
 function clearAllTripSelections(){
   cancelTripRequest();
   state.selected=null;
+  state.selectedTrip=null;
+  state.lastTripRefreshAt=0;
   clearTripLayers();
   state.focusSelected=false;
   updateFocusButton();
@@ -681,12 +691,33 @@ function flattenPolyline(poly){
   return out.filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
 }
 
-async function loadTripDetails(d){
-  const tripId=d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id;
+function setTripStopMarkerStyle(marker,d,index,nextIndex){
+  const isNext=index===nextIndex;
+  const isPast=index<nextIndex;
+  marker.setRadius(isNext?(window.innerWidth<=700?7:6):(window.innerWidth<=700?4:(map.getZoom()<=11?2.5:3.5)));
+  marker.setStyle({
+    color:isNext?"#ffffff":(modes[d.mode]?.c||"#4da8ff"),
+    weight:isNext?3:2,
+    fillColor:isNext?(modes[d.mode]?.c||"#4da8ff"):"#101722",
+    fillOpacity:isPast?0.6:1,
+    opacity:isPast?0.7:1
+  });
+}
 
-  // A new vehicle becomes the active detail view, while previously loaded routes stay on the map.
-  cancelTripRequest();
-  state.selected=d.id;
+async function loadTripDetails(d,{background=false}={}){
+  const activeSelection=state.selectedTrip;
+  const radarTripId=d.raw?.tripId||d.raw?.journeyId||d.raw?.trip?.id;
+  const tripId=background?(activeSelection?.tripId||radarTripId):radarTripId;
+
+  if(background){
+    if(!state.selected||!activeSelection||state.selected!==d.id||state.tripController)return;
+  }else{
+    // A new vehicle becomes the active detail view, while previously loaded routes stay on the map.
+    cancelTripRequest();
+    state.selected=d.id;
+    state.selectedTrip={vehicleId:d.id,tripId:String(tripId||""),line:d.line,mode:d.mode,snapshot:d};
+  }
+
   const selectionSeq=state.selectionSeq;
   const tripKey=String(tripId||d.id);
 
@@ -694,16 +725,17 @@ async function loadTripDetails(d){
   document.body.classList.add("detail-open");
   $("detailTitle").textContent=`${modes[d.mode]?.icon||""} ${d.line}`;
   $("detailSub").textContent=`${modes[d.mode]?.name||""} · ${d.raw?.direction||d.raw?.destination?.name||"Richtung unbekannt"}`;
-  $("detailBody").innerHTML='<div class="detail-loading">Fahrtdetails werden geladen …</div>';
+  if(!background)$("detailBody").innerHTML='<div class="detail-loading">Fahrtdetails werden geladen …</div>';
 
   if(!tripId){
-    $("detailBody").innerHTML='<div class="note">Für dieses Radar-Fahrzeug wurde keine Trip-ID geliefert. Deshalb können keine Haltestellen oder Verspätungen nachgeladen werden.</div>';
+    if(!background)$("detailBody").innerHTML='<div class="note">Für dieses Radar-Fahrzeug wurde keine Trip-ID geliefert. Deshalb können keine Haltestellen oder Verspätungen nachgeladen werden.</div>';
     return;
   }
 
+  state.lastTripRefreshAt=Date.now();
   const controller=new AbortController();
   state.tripController=controller;
-  const isCurrent=()=>state.selectionSeq===selectionSeq&&state.selected===d.id&&!controller.signal.aborted;
+  const isCurrent=()=>state.selectionSeq===selectionSeq&&state.selected===d.id&&String(state.selectedTrip?.tripId||"")===String(tripId)&&!controller.signal.aborted;
 
   try{
     const r=await fetch(`/api/trip?id=${encodeURIComponent(tripId)}`,{
@@ -723,7 +755,7 @@ async function loadTripDetails(d){
       const t=new Date(s.departure||s.arrival||0).getTime();
       return Number.isFinite(t)&&t>=now-60000;
     });
-    if(nextIndex<0)nextIndex=0;
+    if(nextIndex<0)nextIndex=Math.max(0,stops.length-1);
 
     const active=stops[nextIndex]||{};
     const activeDelay=Number.isFinite(Number(active.departureDelay))
@@ -741,6 +773,7 @@ async function loadTripDetails(d){
         <div class="detail-key">Verspätung</div><div>${delayText(activeDelay)}</div>
         <div class="detail-key">Nächster Halt</div><div>${esc(active.stop?.name||active.name||"—")}</div>
         <div class="detail-key">Linie</div><div>${esc(d.line)}</div>
+        <div class="detail-key">Positionsart</div><div>${d.raw?.realtime===false?"Fahrplan-Hochrechnung":"Live-Prognose"} · kein GPS</div>
       </div>
 
       <div class="route-chip" style="--route-color:${modes[d.mode]?.c||"#4da8ff"}">
@@ -823,31 +856,29 @@ async function loadTripDetails(d){
         routeLayer=L.layerGroup([halo,mainLine]).addTo(map);
       }
 
+      let stopMarkerEntries=[];
       if(allStopEntries.length){
-        const stopMarkers=allStopEntries.map(({s,p,index})=>{
-          const isNext=index===nextIndex;
-          const isPast=index<nextIndex;
-          const marker=L.circleMarker(p,{
-            pane:"tripStopPane",
-            radius:isNext?(window.innerWidth<=700?7:6):(window.innerWidth<=700?4:(map.getZoom()<=11?2.5:3.5)),
-            color:isNext?"#ffffff":(modes[d.mode]?.c||"#4da8ff"),
-            weight:isNext?3:2,
-            fillColor:isNext?(modes[d.mode]?.c||"#4da8ff"):"#101722",
-            fillOpacity:isPast?0.6:1,
-            opacity:isPast?0.7:1,
-            interactive:false
-          });
-          return marker;
+        stopMarkerEntries=allStopEntries.map(({p,index})=>{
+          const marker=L.circleMarker(p,{pane:"tripStopPane",interactive:false});
+          setTripStopMarkerStyle(marker,d,index,nextIndex);
+          return {marker,index};
         });
-        stopLayer=L.layerGroup(stopMarkers).addTo(map);
+        stopLayer=L.layerGroup(stopMarkerEntries.map(x=>x.marker)).addTo(map);
       }
 
-      state.tripLayers.set(tripKey,{routeLayer,stopLayer,bounds:routeBounds,line:d.line,mode:d.mode});
+      state.tripLayers.set(tripKey,{routeLayer,stopLayer,stopMarkerEntries,bounds:routeBounds,line:d.line,mode:d.mode,nextIndex});
+    }else{
+      // Keep the route geometry, but move the highlighted "next stop" as live details change.
+      const existing=state.tripLayers.get(tripKey);
+      for(const entry of existing?.stopMarkerEntries||[]){
+        setTripStopMarkerStyle(entry.marker,d,entry.index,nextIndex);
+      }
+      if(existing)existing.nextIndex=nextIndex;
     }
 
     if(!isCurrent())return;
     const allBounds=selectedTripBounds();
-    if(allBounds.isValid()){
+    if(!background&&allBounds.isValid()){
       // Keep every selected route visible together.
       map.fitBounds(allBounds.pad(.06),{
         maxZoom:14,
@@ -869,10 +900,21 @@ async function loadTripDetails(d){
   }catch(e){
     if(e?.name==="AbortError"||!isCurrent())return;
     console.error("Trip-Details:",e);
-    $("detailBody").innerHTML=`<div class="note">Fahrtdetails konnten nicht geladen werden: ${esc(e.message)}</div>`;
+    if(!background)$("detailBody").innerHTML=`<div class="note">Fahrtdetails konnten nicht geladen werden: ${esc(e.message)}</div>`;
   }finally{
     if(state.tripController===controller)state.tripController=null;
   }
+}
+
+async function refreshSelectedTripDetails(){
+  const selected=state.selectedTrip;
+  if(!selected||!state.selected||state.tripController)return;
+  if(Date.now()-state.lastTripRefreshAt<SELECTED_TRIP_REFRESH_MS-1000)return;
+  const current=state.vehicles.get(selected.vehicleId);
+  const d=current||selected.snapshot;
+  if(!d)return;
+  if(current)selected.snapshot=current;
+  await loadTripDetails(d,{background:true});
 }
 
 
@@ -1233,9 +1275,11 @@ async function refresh(){
     $("total").textContent=usable.toLocaleString("de-DE");
     renderVehicles();
     window.dispatchEvent(new CustomEvent("berlin-live-vehicles-updated"));
+    void refreshSelectedTripDetails();
 
     if(usable>0){
-      status("ok","LIVE",`${usable} Fahrzeuge · ${serverMeta?serverMeta.tiles_ok+"/"+serverMeta.tiles_total+" Berlin-Kacheln · ":""}${new Date().toLocaleTimeString("de-DE")}`);
+      const dataTime=serverMeta?.generated_at?new Date(serverMeta.generated_at):new Date();
+      status("ok","≈ LIVE",`${usable} berechnete Positionen · kein GPS · ${serverMeta?serverMeta.tiles_ok+"/"+serverMeta.tiles_total+" Berlin-Kacheln · ":""}Stand ${dataTime.toLocaleTimeString("de-DE")}`);
     }else{
       const ok=results.filter(x=>x.status==="fulfilled").length;
       status("err","0 Fahrzeuge",ok?`Radar antwortet, aber keine Positionen erkannt`:"Radar nicht erreichbar");
