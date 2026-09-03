@@ -39,7 +39,7 @@ jobs:
               -o /tmp/viewport.json -w '%{http_code}' || true)
             route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
             asset_ok=0
-            if [ "$asset" = "200" ] && grep -q '20260903-radar-stable-v9' /tmp/enhancements.js && node --check /tmp/enhancements.js >/dev/null 2>&1; then asset_ok=1; fi
+            if [ "$asset" = "200" ] && grep -q '20260903-zoom-direction-v10' /tmp/enhancements.js && node --check /tmp/enhancements.js >/dev/null 2>&1; then asset_ok=1; fi
             echo "attempt=$i home=$home asset=$asset asset_ok=$asset_ok radar=$radar viewport=$viewport route=$route"
             if [ "$home" = "200" ] && [ "$asset_ok" = "1" ] && [ "$radar" = "200" ] && [ "$viewport" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
             sleep 10
