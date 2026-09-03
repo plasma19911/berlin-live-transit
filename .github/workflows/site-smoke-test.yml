@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.github/workflows/site-smoke-test.yml'
+      - 'functions/api/radar.js'
       - 'functions/api/radar-berlin.js'
       - 'functions/api/route.js'
       - 'public/index.html'
@@ -25,11 +26,25 @@ jobs:
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             home=$(curl -LsS --max-time 25 -o /tmp/index.html -w '%{http_code}' 'https://berlin-live-transit.pages.dev/' || true)
             radar=$(curl -LsS --max-time 35 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin' || true)
+            viewport=$(curl -LsS --max-time 35 --get 'https://berlin-live-transit.pages.dev/api/radar' \
+              --data-urlencode 'north=52.56' \
+              --data-urlencode 'south=52.48' \
+              --data-urlencode 'west=13.32' \
+              --data-urlencode 'east=13.48' \
+              --data-urlencode 'results=128' \
+              --data-urlencode 'duration=20' \
+              --data-urlencode 'frames=4' \
+              --data-urlencode 'polylines=true' \
+              -o /tmp/viewport.json -w '%{http_code}' || true)
             route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
-            echo "attempt=$i home=$home radar=$radar route=$route"
-            if [ "$home" = "200" ] && [ "$radar" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
+            echo "attempt=$i home=$home radar=$radar viewport=$viewport route=$route"
+            if [ "$home" = "200" ] && [ "$radar" = "200" ] && [ "$viewport" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
             sleep 10
           done
-          cat /tmp/radar.json
+          echo '--- radar-berlin ---'
+          cat /tmp/radar.json || true
+          echo
+          echo '--- viewport radar ---'
+          cat /tmp/viewport.json || true
           echo
           test "$ok" = "1"
