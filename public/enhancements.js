@@ -1,9 +1,10 @@
 (() => {
   "use strict";
 
-  const version = "20260903-continuous-motion-v7";
+  const version = "20260903-speed-safety-v8";
   const ACCURACY_REFRESH_MS = 15000;
   const VIEW_PADDING = 0.10;
+  const STALE_STOP_GRACE_MS = 4000;
   const DWELL_FALLBACK_MS = {
     bus: 18000,
     replacement: 20000,
@@ -13,6 +14,36 @@
     regional: 40000,
     express: 55000,
     ferry: 45000
+  };
+  const MAX_SPEED_MPS = {
+    bus: 16,
+    replacement: 14,
+    tram: 17,
+    subway: 24,
+    suburban: 30,
+    regional: 38,
+    express: 45,
+    ferry: 11
+  };
+  const CORRECTION_SPEED_MPS = {
+    bus: 8,
+    replacement: 7,
+    tram: 9,
+    subway: 14,
+    suburban: 16,
+    regional: 20,
+    express: 25,
+    ferry: 6
+  };
+  const STOP_HOLD_RADIUS_M = {
+    bus: 12,
+    replacement: 12,
+    tram: 10,
+    subway: 14,
+    suburban: 16,
+    regional: 18,
+    express: 20,
+    ferry: 18
   };
 
   const scripts = [
@@ -129,6 +160,12 @@
     return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   };
 
+  const speedProfile = vehicle => ({
+    max: MAX_SPEED_MPS[vehicle?.mode] || 16,
+    correction: CORRECTION_SPEED_MPS[vehicle?.mode] || 8,
+    holdRadius: STOP_HOLD_RADIUS_M[vehicle?.mode] || 12
+  });
+
   const rememberPosition = (id, marker, point = null) => {
     const p = point || marker?.getLatLng?.();
     const lat = Number(p?.lat), lng = Number(p?.lng);
@@ -236,7 +273,7 @@
       if (!arrival && departure) arrival = departure - fallbackDwell;
       if (arrival && !departure) departure = arrival + fallbackDwell;
       if (!arrival && !departure) continue;
-      if ((departure || arrival) >= now - 15000) {
+      if ((departure || arrival) >= now - STALE_STOP_GRACE_MS) {
         return { point, arrival, departure, stopover, fallbackDwell };
       }
     }
@@ -247,6 +284,22 @@
     const current = motions.get(id);
     if (current) current.cancelled = true;
     motions.delete(id);
+  };
+
+  const holdAtStop = (id, marker, point, departure, motion) => {
+    marker.setLatLng([point.lat, point.lng]);
+    rememberPosition(id, marker, point);
+    const hold = () => {
+      if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
+      if (Date.now() < departure) {
+        marker.setLatLng([point.lat, point.lng]);
+        rememberPosition(id, marker, point);
+        requestAnimationFrame(hold);
+      } else {
+        motions.delete(id);
+      }
+    };
+    requestAnimationFrame(hold);
   };
 
   const startVehicleMotion = (id, rendered, vehicle) => {
@@ -263,21 +316,25 @@
     marker.setLatLng([from.lat, from.lng]);
     rememberPosition(id, marker, from);
 
+    const profile = speedProfile(vehicle);
     const stop = nextStopInfo(vehicle);
     if (!stop) {
       const distance = haversine(from, radarPoint);
       if (distance < 1) return;
       const path = routePath(vehicle.raw, from, radarPoint);
       const metrics = pathMetrics(path);
+      if (metrics.total <= 0) return;
+      const physicalMinimum = metrics.total / profile.max * 1000;
+      const correctionDuration = metrics.total / profile.correction * 1000;
+      const duration = Math.max(2500, physicalMinimum, correctionDuration);
       const started = performance.now();
-      const duration = Math.max(3500, Math.min(14000, distance * 35));
-      const motion = { cancelled: false };
+      const motion = { cancelled: false, speedMps: metrics.total / (duration / 1000) };
       cancelMotion(id);
       motions.set(id, motion);
 
-      const step = now => {
+      const step = frameNow => {
         if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
-        const p = Math.min(1, (now - started) / duration);
+        const p = Math.min(1, (frameNow - started) / duration);
         const pos = pointAlong(path, metrics, p);
         if (pos) {
           marker.setLatLng([pos.lat, pos.lng]);
@@ -292,35 +349,44 @@
     const now = Date.now();
     const arrival = stop.arrival || now + ACCURACY_REFRESH_MS;
     const departure = stop.departure || arrival + stop.fallbackDwell;
+    const distanceToStop = haversine(from, stop.point);
 
     cancelMotion(id);
-    const motion = { cancelled: false };
+    const motion = { cancelled: false, speedMps: 0 };
     motions.set(id, motion);
 
-    if (arrival <= now && now < departure) {
-      marker.setLatLng([stop.point.lat, stop.point.lng]);
-      rememberPosition(id, marker, stop.point);
-      const hold = () => {
-        if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
-        if (Date.now() < departure) {
-          marker.setLatLng([stop.point.lat, stop.point.lng]);
-          rememberPosition(id, marker, stop.point);
-          requestAnimationFrame(hold);
-        } else {
-          motions.delete(id);
-        }
-      };
-      requestAnimationFrame(hold);
+    // Only treat the vehicle as actually standing at the stop when its rendered position
+    // is already very close. An optimistic VBB arrival must never teleport a bus hundreds
+    // of metres forward merely because the predicted arrival timestamp has passed.
+    if (arrival <= now && now < departure && distanceToStop <= profile.holdRadius) {
+      holdAtStop(id, marker, stop.point, departure, motion);
       return;
     }
 
-    const remaining = Math.max(1200, arrival - now);
     const distanceToRadar = haversine(from, radarPoint);
     const startPoint = distanceToRadar > 1200 ? radarPoint : from;
     const path = routePath(vehicle.raw, startPoint, stop.point);
     const correctionPath = haversine(from, startPoint) > 3 ? [from, ...path] : path;
     const metrics = pathMetrics(correctionPath);
-    if (metrics.total <= 0) return;
+    if (metrics.total <= 0) {
+      if (Date.now() < departure && distanceToStop <= profile.holdRadius) {
+        holdAtStop(id, marker, stop.point, departure, motion);
+      } else {
+        motions.delete(id);
+      }
+      return;
+    }
+
+    const scheduledRemaining = Math.max(0, arrival - now);
+    const physicalMinimum = metrics.total / profile.max * 1000;
+    const correctionDuration = metrics.total / profile.correction * 1000;
+    // If the timetable says the vehicle should already be at the stop, move it there at a
+    // conservative correction speed. If the ETA is still ahead, honour it unless that would
+    // require an implausibly high speed; then arrive visually later instead of racing.
+    const remaining = arrival > now
+      ? Math.max(1500, scheduledRemaining, physicalMinimum)
+      : Math.max(2500, correctionDuration, physicalMinimum);
+    motion.speedMps = metrics.total / (remaining / 1000);
     const started = performance.now();
 
     const step = frameNow => {
@@ -334,9 +400,7 @@
       if (p < 1) {
         requestAnimationFrame(step);
       } else if (Date.now() < departure) {
-        marker.setLatLng([stop.point.lat, stop.point.lng]);
-        rememberPosition(id, marker, stop.point);
-        requestAnimationFrame(step);
+        holdAtStop(id, marker, stop.point, departure, motion);
       } else {
         motions.delete(id);
       }
@@ -379,7 +443,11 @@
     const freshness = Number.isFinite(age)
       ? ` · Prognosedaten ca. ${Math.max(0, Math.round(age))} s alt`
       : "";
-    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}. Zwischen Updates fährt das Symbol kontinuierlich entlang der gelieferten Strecke bis zur nächsten prognostizierten Ankunft und hält bis zur Abfahrt.`;
+    const activeMotion = motions.get(state.selected);
+    const speedText = Number.isFinite(activeMotion?.speedMps)
+      ? ` · Animation ca. ${Math.round(activeMotion.speedMps * 3.6)} km/h`
+      : "";
+    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}${speedText}. Zwischen Updates folgt das Symbol der gelieferten Strecke. Unplausible Aufholsprünge werden begrenzt; eine zu optimistische Ankunft führt deshalb nicht mehr zum Teleportieren an die Haltestelle.`;
   };
 
   scripts.reduce((p, src) => p.then(() => load(src)), Promise.resolve()).catch(error => {
