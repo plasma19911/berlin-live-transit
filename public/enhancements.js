@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const version = "20260903-continuous-motion-v6";
+  const version = "20260903-continuous-motion-v7";
   const ACCURACY_REFRESH_MS = 15000;
   const VIEW_PADDING = 0.10;
   const DWELL_FALLBACK_MS = {
@@ -25,6 +25,7 @@
 
   let viewRefreshTimer = null;
   const motions = new Map();
+  const visualPositions = new Map();
 
   const load = src => new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -47,7 +48,6 @@
     viewRefreshTimer = setTimeout(triggerFreshRadar, delay);
   };
 
-  // Capture the Leaflet instance that the main app creates immediately after this file.
   if (window.L?.map && !window.__berlinLiveMapCaptureInstalled) {
     window.__berlinLiveMapCaptureInstalled = true;
     const originalMapFactory = window.L.map;
@@ -62,8 +62,9 @@
     };
   }
 
-  // The original page asks /api/radar-berlin for all Berlin. Rewrite only that call to
-  // the bbox-aware radar endpoint and request movement geometry for smooth road/track motion.
+  // Replace the full-Berlin radar request with a request for the visible viewport only.
+  // Route polylines and several temporal frames are requested so movement can follow
+  // streets/tracks instead of jumping from one estimated point to the next.
   if (!window.__berlinViewportRadarInstalled) {
     window.__berlinViewportRadarInstalled = true;
     const nativeFetch = window.fetch.bind(window);
@@ -126,6 +127,12 @@
     const dl = (b.lng - a.lng) * Math.PI / 180;
     const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
     return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  };
+
+  const rememberPosition = (id, marker, point = null) => {
+    const p = point || marker?.getLatLng?.();
+    const lat = Number(p?.lat), lng = Number(p?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) visualPositions.set(id, { lat, lng });
   };
 
   const geometryPaths = geometry => {
@@ -246,29 +253,36 @@
     const marker = rendered?.marker;
     if (!marker?.getLatLng || !marker?.setLatLng) return;
 
-    const markerLatLng = marker.getLatLng();
-    const from = { lat: Number(markerLatLng.lat), lng: Number(markerLatLng.lng) };
+    const currentMarker = marker.getLatLng();
+    const remembered = visualPositions.get(id);
+    const from = remembered || { lat: Number(currentMarker.lat), lng: Number(currentMarker.lng) };
     const radarPoint = { lat: Number(vehicle.lat), lng: Number(vehicle.lon) };
     if (![from.lat, from.lng, radarPoint.lat, radarPoint.lng].every(Number.isFinite)) return;
 
+    // Restore the last actually displayed point before the browser paints the new radar point.
+    marker.setLatLng([from.lat, from.lng]);
+    rememberPosition(id, marker, from);
+
     const stop = nextStopInfo(vehicle);
     if (!stop) {
-      // Without a timed next stop we still correct smoothly to the newest radar estimate.
       const distance = haversine(from, radarPoint);
       if (distance < 1) return;
       const path = routePath(vehicle.raw, from, radarPoint);
       const metrics = pathMetrics(path);
       const started = performance.now();
-      const duration = Math.max(2500, Math.min(12000, distance * 30));
+      const duration = Math.max(3500, Math.min(14000, distance * 35));
       const motion = { cancelled: false };
       cancelMotion(id);
       motions.set(id, motion);
-      marker.setLatLng([from.lat, from.lng]);
+
       const step = now => {
         if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
         const p = Math.min(1, (now - started) / duration);
         const pos = pointAlong(path, metrics, p);
-        if (pos) marker.setLatLng([pos.lat, pos.lng]);
+        if (pos) {
+          marker.setLatLng([pos.lat, pos.lng]);
+          rememberPosition(id, marker, pos);
+        }
         if (p < 1) requestAnimationFrame(step); else motions.delete(id);
       };
       requestAnimationFrame(step);
@@ -283,13 +297,14 @@
     const motion = { cancelled: false };
     motions.set(id, motion);
 
-    // If the vehicle is currently in its dwell window, keep it exactly at the stop.
     if (arrival <= now && now < departure) {
       marker.setLatLng([stop.point.lat, stop.point.lng]);
+      rememberPosition(id, marker, stop.point);
       const hold = () => {
         if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
         if (Date.now() < departure) {
           marker.setLatLng([stop.point.lat, stop.point.lng]);
+          rememberPosition(id, marker, stop.point);
           requestAnimationFrame(hold);
         } else {
           motions.delete(id);
@@ -303,26 +318,24 @@
     const distanceToRadar = haversine(from, radarPoint);
     const startPoint = distanceToRadar > 1200 ? radarPoint : from;
     const path = routePath(vehicle.raw, startPoint, stop.point);
-    const metrics = pathMetrics(path);
-    if (metrics.total <= 0) return;
-
-    // Do not teleport to a newly corrected radar point: prepend the current rendered point
-    // and spend a small fraction of the remaining time blending back onto the route.
     const correctionPath = haversine(from, startPoint) > 3 ? [from, ...path] : path;
-    const correctionMetrics = pathMetrics(correctionPath);
+    const metrics = pathMetrics(correctionPath);
+    if (metrics.total <= 0) return;
     const started = performance.now();
-    marker.setLatLng([from.lat, from.lng]);
 
     const step = frameNow => {
       if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
-      const elapsed = frameNow - started;
-      const p = Math.max(0, Math.min(1, elapsed / remaining));
-      const pos = pointAlong(correctionPath, correctionMetrics, p);
-      if (pos) marker.setLatLng([pos.lat, pos.lng]);
+      const p = Math.max(0, Math.min(1, (frameNow - started) / remaining));
+      const pos = pointAlong(correctionPath, metrics, p);
+      if (pos) {
+        marker.setLatLng([pos.lat, pos.lng]);
+        rememberPosition(id, marker, pos);
+      }
       if (p < 1) {
         requestAnimationFrame(step);
       } else if (Date.now() < departure) {
         marker.setLatLng([stop.point.lat, stop.point.lng]);
+        rememberPosition(id, marker, stop.point);
         requestAnimationFrame(step);
       } else {
         motions.delete(id);
@@ -340,6 +353,9 @@
     }
     for (const id of [...motions.keys()]) {
       if (!state.markers.has(id) || !state.vehicles.has(id)) cancelMotion(id);
+    }
+    for (const id of [...visualPositions.keys()]) {
+      if (!state.vehicles.has(id)) visualPositions.delete(id);
     }
   };
 
@@ -363,7 +379,7 @@
     const freshness = Number.isFinite(age)
       ? ` · Prognosedaten ca. ${Math.max(0, Math.round(age))} s alt`
       : "";
-    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}. Die Karte bewegt das Fahrzeug zwischen den Updates kontinuierlich entlang der gelieferten Strecke und berücksichtigt Ankunft/Abfahrt am nächsten Halt.`;
+    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}. Zwischen Updates fährt das Symbol kontinuierlich entlang der gelieferten Strecke bis zur nächsten prognostizierten Ankunft und hält bis zur Abfahrt.`;
   };
 
   scripts.reduce((p, src) => p.then(() => load(src)), Promise.resolve()).catch(error => {
