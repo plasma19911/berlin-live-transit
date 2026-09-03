@@ -1,8 +1,10 @@
 (() => {
   "use strict";
 
-  const version = "20260903-radar-stable-v9";
+  const version = "20260903-zoom-direction-v10";
   const ACCURACY_REFRESH_MS = 15000;
+  const MIN_ACTIVE_ZOOM = 12;
+  const RICH_PATH_ZOOM = 14;
   const VIEW_PADDING = 0.10;
   const VIEWPORT_TIMEOUT_MS = 4500;
   const STALE_STOP_GRACE_MS = 4000;
@@ -51,8 +53,6 @@
     ferry: 18
   };
 
-  // These are the existing UI/journey additions. Keep them separate from the radar logic,
-  // so a failed optional UI script can never disable the base live map.
   const scripts = [
     "https://cdn.jsdelivr.net/gh/plasma19911/berlin-live-transit@ccebe02118fd0901e0f1c51a13284f654b5fe2bc/public/enhancements.js",
     "/journey-upgrade-core.js",
@@ -74,19 +74,38 @@
     document.head.appendChild(s);
   });
 
+  const currentZoom = () => Number(window.__berlinLiveMap?.getZoom?.() ?? 0);
+
+  // index.html also has a legacy 30-second full refresh. Keep it only when the user has
+  // zoomed close enough for live tracking to be useful. The first page load still gets one
+  // overview snapshot, but the overview no longer hammers the radar every 30 seconds.
+  if (!window.__berlinZoomIntervalGuardInstalled) {
+    window.__berlinZoomIntervalGuardInstalled = true;
+    const nativeSetInterval = window.setInterval.bind(window);
+    window.setInterval = (handler, timeout, ...args) => {
+      if (Number(timeout) === 30000 && typeof handler === "function" && handler.name === "refresh") {
+        return nativeSetInterval(() => {
+          if (currentZoom() >= MIN_ACTIVE_ZOOM && !document.hidden) handler(...args);
+        }, timeout);
+      }
+      return nativeSetInterval(handler, timeout, ...args);
+    };
+  }
+
   const triggerFreshRadar = () => {
     const state = window.__berlinLiveState;
     const refresh = document.getElementById("refresh");
     if (!refresh || document.hidden || state?.busy) return;
+    if (currentZoom() < MIN_ACTIVE_ZOOM) return;
     refresh.click();
   };
 
-  const scheduleViewRefresh = (delay = 260) => {
+  const scheduleViewRefresh = (delay = 320) => {
     clearTimeout(viewRefreshTimer);
+    if (currentZoom() < MIN_ACTIVE_ZOOM) return;
     viewRefreshTimer = setTimeout(triggerFreshRadar, delay);
   };
 
-  // Capture the Leaflet map because enhancements.js is loaded before index.html creates it.
   if (window.L?.map && !window.__berlinLiveMapCaptureInstalled) {
     window.__berlinLiveMapCaptureInstalled = true;
     const originalMapFactory = window.L.map;
@@ -95,15 +114,22 @@
       window.__berlinLiveMap = map;
       setTimeout(() => {
         map.on("moveend", () => scheduleViewRefresh());
-        map.on("zoomend", () => scheduleViewRefresh());
+        map.on("zoomend", () => {
+          if (Number(map.getZoom()) < MIN_ACTIVE_ZOOM) {
+            clearTimeout(viewRefreshTimer);
+            for (const id of [...motions.keys()]) cancelMotion(id);
+            visualPositions.clear();
+            return;
+          }
+          scheduleViewRefresh(220);
+        });
       }, 0);
       return map;
     };
   }
 
-  // Use only the visible viewport for the normal radar refresh. Most importantly this is
-  // fail-safe: if the viewport endpoint is slow or fails, immediately use the proven full
-  // Berlin endpoint. Optional motion detail must never be able to blank the map.
+  // At live-tracking zoom levels every normal radar request is replaced by one request for
+  // the visible viewport. Wide overview zooms remain a lightweight snapshot only.
   if (!window.__berlinViewportRadarInstalled) {
     window.__berlinViewportRadarInstalled = true;
     const nativeFetch = window.fetch.bind(window);
@@ -115,8 +141,10 @@
         if (!rawUrl) return nativeFetch(input, init);
         originalUrl = new URL(rawUrl, window.location.href);
         const map = window.__berlinLiveMap;
+        const zoom = Number(map?.getZoom?.() ?? 0);
 
         if (
+          zoom >= MIN_ACTIVE_ZOOM &&
           originalUrl.origin === window.location.origin &&
           originalUrl.pathname === "/api/radar-berlin" &&
           map?.getBounds
@@ -128,8 +156,7 @@
           const east = Math.min(14.00, b.getEast());
 
           if (north > south && east > west) {
-            const zoom = Number(map.getZoom?.() ?? 11);
-            const wantRichPath = zoom >= 14;
+            const wantRichPath = zoom >= RICH_PATH_ZOOM;
             const viewportUrl = new URL("/api/radar", window.location.origin);
             viewportUrl.search = new URLSearchParams({
               north: String(north),
@@ -190,6 +217,36 @@
     const dl = (b.lng - a.lng) * Math.PI / 180;
     const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
     return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  };
+
+  const bearingBetween = (a, b) => {
+    if (!a || !b || haversine(a, b) < 1.2) return null;
+    const lat1 = a.lat * Math.PI / 180;
+    const lat2 = b.lat * Math.PI / 180;
+    const dLon = (b.lng - a.lng) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const deg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    return Number.isFinite(deg) ? deg : null;
+  };
+
+  const setMarkerBearing = (marker, bearing, motion = null) => {
+    if (!Number.isFinite(Number(bearing))) return;
+    const root = marker?.getElement?.();
+    if (!root) return;
+    const arrow = root.querySelector?.(".veh-arrow");
+    if (!arrow) return;
+
+    let target = Number(bearing);
+    if (motion && Number.isFinite(motion.displayBearing)) {
+      const normalizedPrevious = ((motion.displayBearing % 360) + 360) % 360;
+      const delta = ((target - normalizedPrevious + 540) % 360) - 180;
+      target = motion.displayBearing + delta;
+    }
+    if (motion) motion.displayBearing = target;
+
+    arrow.style.setProperty("--bearing", `${target.toFixed(1)}deg`);
+    root.querySelector?.(".veh-wrap")?.classList.remove("no-bearing");
   };
 
   const profileFor = vehicle => ({
@@ -341,6 +398,11 @@
     }
     motion.speedMps = metrics.total / Math.max(0.001, duration / 1000);
     const started = performance.now();
+
+    const initialAhead = pointAlong(path, metrics, Math.min(1, Math.max(0.002, 10 / metrics.total)));
+    const initialBearing = bearingBetween(path[0], initialAhead);
+    if (initialBearing !== null) setMarkerBearing(marker, initialBearing, motion);
+
     const step = frameNow => {
       if (motion.cancelled || !window.__berlinLiveState?.markers?.has(id)) return;
       const p = Math.max(0, Math.min(1, (frameNow - started) / duration));
@@ -348,6 +410,15 @@
       if (pos) {
         marker.setLatLng([pos.lat, pos.lng]);
         rememberPosition(id, marker, pos);
+
+        // Direction is derived from the path the marker is actually travelling on, not from
+        // a possibly stale/wrong API bearing. Look roughly 10 m ahead to avoid jitter.
+        const lookAhead = Math.min(1, p + Math.max(0.002, Math.min(0.04, 10 / metrics.total)));
+        if (lookAhead > p) {
+          const ahead = pointAlong(path, metrics, lookAhead);
+          const liveBearing = bearingBetween(pos, ahead);
+          if (liveBearing !== null) setMarkerBearing(marker, liveBearing, motion);
+        }
       }
       if (p < 1) requestAnimationFrame(step);
       else if (done) done();
@@ -372,13 +443,14 @@
     const profile = profileFor(vehicle);
     const stop = nextStopInfo(vehicle);
     cancelMotion(id);
-    const motion = { cancelled: false, speedMps: 0 };
+    const motion = { cancelled: false, speedMps: 0, displayBearing: null };
     motions.set(id, motion);
 
     if (!stop) {
       const path = routePath(vehicle.raw, from, radarPoint);
       const metrics = pathMetrics(path);
       if (metrics.total < 1) {
+        if (Number.isFinite(Number(vehicle.bearing))) setMarkerBearing(marker, Number(vehicle.bearing), motion);
         motions.delete(id);
         return;
       }
@@ -397,18 +469,20 @@
     const distanceToStop = haversine(from, stop.point);
 
     if (arrival <= now && now < departure && distanceToStop <= profile.holdRadius) {
+      const stopBearing = bearingBetween(radarPoint, stop.point);
+      if (stopBearing !== null) setMarkerBearing(marker, stopBearing, motion);
       holdAtStop(id, marker, stop.point, departure, motion);
       return;
     }
 
-    // A wildly different new radar point is used only as an anchor for the new prediction;
-    // otherwise continue exactly from the last visibly rendered position to avoid teleporting.
     const distanceToRadar = haversine(from, radarPoint);
     const startPoint = distanceToRadar > 1200 ? radarPoint : from;
     const path = routePath(vehicle.raw, startPoint, stop.point);
     const correctionPath = haversine(from, startPoint) > 3 ? [from, ...path] : path;
     const metrics = pathMetrics(correctionPath);
     if (metrics.total <= 0) {
+      const toStop = bearingBetween(from, stop.point);
+      if (toStop !== null) setMarkerBearing(marker, toStop, motion);
       motions.delete(id);
       return;
     }
@@ -429,6 +503,23 @@
   const updateVehicleMotions = () => {
     const state = window.__berlinLiveState;
     if (!state?.markers || !state?.vehicles) return;
+
+    // At overview zooms do not animate. Still correct the direction arrow from the next stop,
+    // which is usually more reliable than the raw bearing field.
+    if (currentZoom() < MIN_ACTIVE_ZOOM) {
+      for (const id of [...motions.keys()]) cancelMotion(id);
+      visualPositions.clear();
+      for (const [id, rendered] of state.markers.entries()) {
+        const vehicle = state.vehicles.get(id);
+        if (!vehicle) continue;
+        const stop = nextStopInfo(vehicle);
+        const from = { lat: Number(vehicle.lat), lng: Number(vehicle.lon) };
+        const staticBearing = stop ? bearingBetween(from, stop.point) : null;
+        if (staticBearing !== null) setMarkerBearing(rendered.marker, staticBearing);
+        else if (Number.isFinite(Number(vehicle.bearing))) setMarkerBearing(rendered.marker, Number(vehicle.bearing));
+      }
+      return;
+    }
 
     for (const [id, rendered] of state.markers.entries()) {
       const vehicle = state.vehicles.get(id);
@@ -466,21 +557,20 @@
     const speedText = Number.isFinite(activeMotion?.speedMps)
       ? ` · Animation ca. ${Math.round(activeMotion.speedMps * 3.6)} km/h`
       : "";
-    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}${speedText}. Die Karte nutzt bevorzugt den sichtbaren Ausschnitt und fällt bei Radarproblemen automatisch auf den stabilen Berlin-Radar zurück.`;
+    note.textContent = `Positionsgenauigkeit: VBB-Prognose, kein GPS${freshness}${speedText}. Live-Aktualisierung und Bewegung starten ab Zoom ${MIN_ACTIVE_ZOOM}. Der Richtungspfeil folgt der tatsächlich dargestellten Fahrstrecke.`;
   };
 
-  // Optional UI additions are deliberately non-fatal.
   scripts.reduce((p, src) => p.then(() => load(src)), Promise.resolve()).catch(error => {
     console.error("Berlin Live Transit Zusatzfunktionen:", error);
   });
 
   window.addEventListener("load", () => {
     setTimeout(triggerFreshRadar, 2200);
-    setInterval(triggerFreshRadar, ACCURACY_REFRESH_MS);
+    window.setInterval(triggerFreshRadar, ACCURACY_REFRESH_MS);
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) setTimeout(triggerFreshRadar, 200);
+    if (!document.hidden && currentZoom() >= MIN_ACTIVE_ZOOM) setTimeout(triggerFreshRadar, 200);
   });
 
   window.addEventListener("berlin-live-vehicles-updated", () => {
