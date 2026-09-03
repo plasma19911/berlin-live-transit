@@ -25,6 +25,7 @@ jobs:
           ok=0
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             home=$(curl -LsS --max-time 25 -o /tmp/index.html -w '%{http_code}' 'https://berlin-live-transit.pages.dev/' || true)
+            asset=$(curl -LsS --max-time 25 -o /tmp/enhancements.js -w '%{http_code}' 'https://berlin-live-transit.pages.dev/enhancements.js' || true)
             radar=$(curl -LsS --max-time 35 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin' || true)
             viewport=$(curl -LsS --max-time 35 --get 'https://berlin-live-transit.pages.dev/api/radar' \
               --data-urlencode 'north=52.56' \
@@ -37,10 +38,14 @@ jobs:
               --data-urlencode 'polylines=true' \
               -o /tmp/viewport.json -w '%{http_code}' || true)
             route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
-            echo "attempt=$i home=$home radar=$radar viewport=$viewport route=$route"
-            if [ "$home" = "200" ] && [ "$radar" = "200" ] && [ "$viewport" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
+            asset_ok=0
+            if [ "$asset" = "200" ] && grep -q '20260903-speed-safety-v8' /tmp/enhancements.js; then asset_ok=1; fi
+            echo "attempt=$i home=$home asset=$asset asset_ok=$asset_ok radar=$radar viewport=$viewport route=$route"
+            if [ "$home" = "200" ] && [ "$asset_ok" = "1" ] && [ "$radar" = "200" ] && [ "$viewport" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
             sleep 10
           done
+          echo '--- deployed enhancements version ---'
+          grep -m1 'const version' /tmp/enhancements.js || true
           echo '--- radar-berlin ---'
           cat /tmp/radar.json || true
           echo
