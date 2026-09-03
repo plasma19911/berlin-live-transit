@@ -4,7 +4,7 @@ const TRANSPORT_REST_UPSTREAMS = [
 ];
 
 const TRANSITOUS_MAP_URL = "https://api.transitous.org/api/v6/map/trips";
-const APP_USER_AGENT = "berlin-live-transit/1.2 (+https://berlin-live-transit.pages.dev/)";
+const APP_USER_AGENT = "berlin-live-transit/1.3 (+https://berlin-live-transit.pages.dev/)";
 
 const ROWS = [[52.72, 52.58], [52.58, 52.44], [52.44, 52.30]];
 const COLS = [[13.05, 13.2375], [13.2375, 13.4250], [13.4250, 13.6125], [13.6125, 13.80]];
@@ -13,6 +13,7 @@ const TILES = ROWS.flatMap(([north, south]) => COLS.map(([west, east]) => ({ nor
 // Fail over quickly. A slow transport.rest call must not block the independent provider.
 const UPSTREAM_TIMEOUT_MS = 1500;
 const TRANSITOUS_TIMEOUT_MS = 9000;
+const TRANSPORT_CACHE_TTL_SECONDS = 3;
 const TRANSITOUS_PRODUCTS = {
   SUBURBAN: "suburban", SUBWAY: "subway", TRAM: "tram", BUS: "bus", COACH: "bus",
   FERRY: "ferry", REGIONAL_RAIL: "regional", HIGHSPEED_RAIL: "express",
@@ -25,6 +26,17 @@ function movementKey(movement) {
   const longitude = Number(position.longitude ?? position.lon);
   return String(movement?.tripId || movement?.journeyId || movement?.id ||
     `${movement?.line?.id || movement?.line?.name || "line"}|${Number.isFinite(latitude) ? latitude.toFixed(5) : ""}|${Number.isFinite(longitude) ? longitude.toFixed(5) : ""}`);
+}
+
+function timestampMs(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n < 1e12 ? n * 1000 : n;
+}
+
+function freshnessSeconds(timestamp, now = Date.now()) {
+  const ms = timestampMs(timestamp);
+  return ms ? Math.max(0, Math.round((now - ms) / 1000)) : null;
 }
 
 async function fetchWithTimeout(url, timeoutMs, cacheTtl) {
@@ -44,13 +56,13 @@ async function fetchWithTimeout(url, timeoutMs, cacheTtl) {
 async function fetchTransportRestTile(tile) {
   const params = new URLSearchParams({
     north: String(tile.north), west: String(tile.west), south: String(tile.south), east: String(tile.east),
-    results: "256", duration: "30", frames: "3", polylines: "false", language: "de", pretty: "false"
+    results: "256", duration: "10", frames: "2", polylines: "false", language: "de", pretty: "false"
   });
   let lastError = "transport.rest unavailable";
 
   for (const base of TRANSPORT_REST_UPSTREAMS) {
     try {
-      const response = await fetchWithTimeout(`${base}?${params.toString()}`, UPSTREAM_TIMEOUT_MS, 8);
+      const response = await fetchWithTimeout(`${base}?${params.toString()}`, UPSTREAM_TIMEOUT_MS, TRANSPORT_CACHE_TTL_SECONDS);
       if (!response.ok) {
         lastError = `${base}: HTTP ${response.status}`;
         continue;
@@ -59,7 +71,8 @@ async function fetchTransportRestTile(tile) {
       const movements = Array.isArray(json) ? json
         : Array.isArray(json.movements) ? json.movements
           : Array.isArray(json.vehicles) ? json.vehicles : [];
-      return { ok: true, movements, upstream: base };
+      const realtimeUpdatedAt = timestampMs(json?.realtimeDataUpdatedAt);
+      return { ok: true, movements, upstream: base, realtimeUpdatedAt };
     } catch (error) {
       const message = error?.name === "AbortError" ? "timeout" : error?.message || String(error);
       lastError = `${base}: ${message}`;
@@ -193,7 +206,8 @@ function movementFromTransitous(segment, trip, now) {
     departure: segment.departure, arrival: segment.arrival,
     plannedDeparture: segment.scheduledDeparture, plannedArrival: segment.scheduledArrival,
     realtime: Boolean(segment.realTime), source: "transitous",
-    positionEstimated: true, positionMethod: "calculated_between_stops"
+    positionEstimated: true, positionMethod: "calculated_between_stops",
+    predictionAgeSeconds: null
   };
 }
 
@@ -204,7 +218,7 @@ async function fetchTransitousFallback() {
     startTime: new Date(now - 5000).toISOString(), endTime: new Date(now + 10000).toISOString(),
     precision: "5", language: "de"
   });
-  const response = await fetchWithTimeout(`${TRANSITOUS_MAP_URL}?${params.toString()}`, TRANSITOUS_TIMEOUT_MS, 15);
+  const response = await fetchWithTimeout(`${TRANSITOUS_MAP_URL}?${params.toString()}`, TRANSITOUS_TIMEOUT_MS, 8);
   if (!response.ok) throw new Error(`Transitous: HTTP ${response.status}`);
   const segments = await response.json();
   if (!Array.isArray(segments)) throw new Error("Transitous: unexpected response format");
@@ -232,6 +246,7 @@ export async function onRequestGet() {
   const started = Date.now();
   const results = await Promise.all(TILES.map(fetchTransportRestTile));
   const unique = new Map(), errors = [];
+  const realtimeTimestamps = [];
   let tilesOk = 0;
   const upstreamCounts = {};
 
@@ -242,12 +257,17 @@ export async function onRequestGet() {
     }
     tilesOk++;
     upstreamCounts[result.upstream] = (upstreamCounts[result.upstream] || 0) + 1;
+    if (Number.isFinite(result.realtimeUpdatedAt)) realtimeTimestamps.push(result.realtimeUpdatedAt);
+    const ageSeconds = freshnessSeconds(result.realtimeUpdatedAt);
+    const updatedIso = Number.isFinite(result.realtimeUpdatedAt) ? new Date(result.realtimeUpdatedAt).toISOString() : null;
     for (const movement of result.movements) {
       const enriched = {
         ...movement,
         source: movement?.source || "transport.rest",
         positionEstimated: true,
-        positionMethod: "calculated_between_stops"
+        positionMethod: "calculated_between_stops",
+        predictionUpdatedAt: updatedIso,
+        predictionAgeSeconds: ageSeconds
       };
       unique.set(movementKey(enriched), enriched);
     }
@@ -264,11 +284,12 @@ export async function onRequestGet() {
             tiles_ok: 1, tiles_total: 1, vehicles_raw_unique: unique.size, coverage: "Berlin",
             partial: false, fallback: true, elapsed_ms: Date.now() - started,
             generated_at: new Date().toISOString(), gps: false, position_method: "calculated_between_stops",
+            realtime_data_updated_at: null, realtime_data_age_seconds: null,
             upstreams: { [TRANSITOUS_MAP_URL]: 1 }, errors: errors.slice(0, 4)
           }
         }, {
           status: 200,
-          headers: { "cache-control": "public, max-age=10", "x-radar-upstream": TRANSITOUS_MAP_URL, "x-radar-fallback": "true" }
+          headers: { "cache-control": "public, max-age=5", "x-radar-upstream": TRANSITOUS_MAP_URL, "x-radar-fallback": "true" }
         });
       }
       errors.push("Transitous returned no usable Berlin vehicles");
@@ -282,16 +303,22 @@ export async function onRequestGet() {
       { status: 502, headers: { "cache-control": "no-store" } });
   }
 
+  const oldestRealtime = realtimeTimestamps.length ? Math.min(...realtimeTimestamps) : null;
+  const newestRealtime = realtimeTimestamps.length ? Math.max(...realtimeTimestamps) : null;
+
   return Response.json({
     movements: [...unique.values()],
     meta: {
       tiles_ok: tilesOk, tiles_total: TILES.length, vehicles_raw_unique: unique.size, coverage: "Berlin",
       partial: tilesOk !== TILES.length, fallback: false, elapsed_ms: Date.now() - started,
       generated_at: new Date().toISOString(), gps: false, position_method: "calculated_between_stops",
+      realtime_data_updated_at: newestRealtime ? new Date(newestRealtime).toISOString() : null,
+      realtime_data_oldest_at: oldestRealtime ? new Date(oldestRealtime).toISOString() : null,
+      realtime_data_age_seconds: freshnessSeconds(oldestRealtime),
       upstreams: upstreamCounts, errors: errors.slice(0, 4)
     }
   }, {
     status: 200,
-    headers: { "cache-control": tilesOk === TILES.length ? "public, max-age=8" : "public, max-age=3" }
+    headers: { "cache-control": tilesOk === TILES.length ? "public, max-age=3" : "public, max-age=2" }
   });
 }
