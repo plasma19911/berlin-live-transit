@@ -3,11 +3,12 @@ const UPSTREAMS = [
   "https://v6.bvg.transport.rest/radar"
 ];
 
-const APP_USER_AGENT = "berlin-live-transit-map/1.5 (+https://berlin-live-transit.pages.dev/)";
+const APP_USER_AGENT = "berlin-live-transit-map/1.6 (+https://berlin-live-transit.pages.dev/)";
 const MAX_LAT_SPAN = 0.10;
 const MAX_LON_SPAN = 0.14;
 const MAX_TILES = 16;
-const UPSTREAM_TIMEOUT_MS = 5000;
+const UPSTREAM_TIMEOUT_MS = 5500;
+const RICH_MAX_TILES = 2;
 
 function finiteParam(url, name) {
   const value = Number(url.searchParams.get(name));
@@ -138,15 +139,19 @@ export async function onRequestGet(context) {
     return Response.json({ movements: [], meta: { tiles_ok: 0, tiles_total: 0, coverage: "outside Berlin" } }, { status: 200 });
   }
 
+  const tiles = buildTiles(bounded.north, bounded.west, bounded.south, bounded.east);
+  const requestedPolylines = incoming.searchParams.get("polylines") !== "false";
+  const richDetail = requestedPolylines && tiles.length <= RICH_MAX_TILES;
   const options = {
-    results: Math.min(256, Math.max(32, Number(incoming.searchParams.get("results") || 256))),
-    duration: Math.min(30, Math.max(5, Number(incoming.searchParams.get("duration") || 20))),
-    frames: Math.min(6, Math.max(2, Number(incoming.searchParams.get("frames") || 4))),
-    polylines: incoming.searchParams.get("polylines") !== "false",
+    results: Math.min(256, Math.max(32, Number(incoming.searchParams.get("results") || 192))),
+    duration: Math.min(25, Math.max(5, Number(incoming.searchParams.get("duration") || 20))),
+    frames: richDetail
+      ? Math.min(4, Math.max(2, Number(incoming.searchParams.get("frames") || 3)))
+      : 2,
+    polylines: richDetail,
     language: incoming.searchParams.get("language") || "de"
   };
 
-  const tiles = buildTiles(bounded.north, bounded.west, bounded.south, bounded.east);
   const started = Date.now();
   const results = await Promise.all(tiles.map(tile => fetchTile(tile, options)));
   const unique = new Map();
@@ -171,6 +176,7 @@ export async function onRequestGet(context) {
       error: "viewport radar providers failed",
       details: errors.slice(0, 8),
       tiles_total: tiles.length,
+      detail_mode: richDetail ? "rich" : "lean",
       elapsed_ms: Date.now() - started
     }, { status: 502, headers: { "cache-control": "no-store" } });
   }
@@ -183,6 +189,9 @@ export async function onRequestGet(context) {
       vehicles_raw_unique: unique.size,
       coverage: "visible viewport",
       partial: tilesOk !== tiles.length,
+      detail_mode: richDetail ? "rich" : "lean",
+      polylines: richDetail,
+      frames: options.frames,
       elapsed_ms: Date.now() - started,
       generated_at: new Date().toISOString(),
       realtime_data_updated_at: realtimeUpdates.length ? realtimeUpdates.at(-1) : null,
@@ -194,7 +203,8 @@ export async function onRequestGet(context) {
     headers: {
       "cache-control": tilesOk === tiles.length ? "public, max-age=3" : "public, max-age=1",
       "x-radar-tiles": `${tilesOk}/${tiles.length}`,
-      "x-radar-scope": "viewport-tiled"
+      "x-radar-scope": "viewport-tiled",
+      "x-radar-detail": richDetail ? "rich" : "lean"
     }
   });
 }
