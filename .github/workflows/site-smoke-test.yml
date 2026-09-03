@@ -28,28 +28,25 @@ jobs:
             asset=$(curl -LsS --max-time 25 -o /tmp/enhancements.js -w '%{http_code}' 'https://berlin-live-transit.pages.dev/enhancements.js' || true)
             radar=$(curl -LsS --max-time 35 -o /tmp/radar.json -w '%{http_code}' 'https://berlin-live-transit.pages.dev/api/radar-berlin' || true)
             viewport=$(curl -LsS --max-time 35 --get 'https://berlin-live-transit.pages.dev/api/radar' \
-              --data-urlencode 'north=52.56' \
-              --data-urlencode 'south=52.48' \
-              --data-urlencode 'west=13.32' \
-              --data-urlencode 'east=13.48' \
-              --data-urlencode 'results=128' \
+              --data-urlencode 'north=52.66' \
+              --data-urlencode 'south=52.38' \
+              --data-urlencode 'west=13.14' \
+              --data-urlencode 'east=13.68' \
+              --data-urlencode 'results=256' \
               --data-urlencode 'duration=20' \
               --data-urlencode 'frames=4' \
               --data-urlencode 'polylines=true' \
               -o /tmp/viewport.json -w '%{http_code}' || true)
             route=$(curl -LsS --max-time 45 --get 'https://berlin-live-transit.pages.dev/api/route' --data-urlencode 'from=Alexanderplatz' --data-urlencode 'to=Hauptbahnhof' -o /tmp/route.json -w '%{http_code}' || true)
             asset_ok=0
-            if [ "$asset" = "200" ] && grep -q '20260903-speed-safety-v8' /tmp/enhancements.js; then asset_ok=1; fi
+            if [ "$asset" = "200" ] && grep -q '20260903-radar-stable-v9' /tmp/enhancements.js; then asset_ok=1; fi
             echo "attempt=$i home=$home asset=$asset asset_ok=$asset_ok radar=$radar viewport=$viewport route=$route"
             if [ "$home" = "200" ] && [ "$asset_ok" = "1" ] && [ "$radar" = "200" ] && [ "$viewport" = "200" ] && [ "$route" = "200" ]; then ok=1; break; fi
             sleep 10
           done
           echo '--- deployed enhancements version ---'
           grep -m1 'const version' /tmp/enhancements.js || true
-          echo '--- radar-berlin ---'
-          cat /tmp/radar.json || true
-          echo
           echo '--- viewport radar ---'
-          cat /tmp/viewport.json || true
+          head -c 1500 /tmp/viewport.json || true
           echo
           test "$ok" = "1"
